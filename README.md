@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
 
-Automated data pipeline for **reconciling retirement plan distributions** between Relius (historical transactions) and Matrix (disbursement/1099 data). Identifies discrepancies, generates correction files, and reduces 1099 errors by 95%.
+Automated data pipeline for **reconciling retirement plan distributions** between Relius (historical transactions) and Matrix (disbursement/1099 data). Identifies discrepancies, generates correction files, and reduces 1099 errors by 95.8%.
 
 > 🛡️ **Privacy First:** All data in this repository is synthetic. Original project built for production with real participant data (SSN, tax codes) - cannot be shared for compliance reasons.
 
