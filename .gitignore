@@ -1,0 +1,240 @@
+# ============================================================================
+# 1099 Reconciliation Pipeline - .gitignore
+# ============================================================================
+# This file prevents sensitive financial data and temporary files from
+# being committed to the repository.
+# ============================================================================
+
+# ============================================================================
+# CRITICAL: REAL DATA (NEVER COMMIT!)
+# ============================================================================
+# All real participant data, SSNs, and financial information
+#data/raw/
+#data/processed/
+
+# Keep only synthetic sample data
+!data/sample/
+!data/sample/*.xlsx
+!data/sample/README.md
+
+# Real output files (may contain sensitive info)
+reports/outputs/
+reports/*.xlsx
+reports/*.csv
+
+# Keep only synthetic sample outputs
+!reports/samples/
+!reports/samples/*.xlsx
+
+# Any file with "real", "prod", or "confidential" in name
+*real*.xlsx
+*real*.csv
+*prod*.xlsx
+*prod*.csv
+*confidential*.*
+*sensitive*.*
+
+# ============================================================================
+# PYTHON
+# ============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# ============================================================================
+# JUPYTER NOTEBOOKS
+# ============================================================================
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Jupyter Notebook temporary files
+.ipynb_checkpoints
+*-checkpoint.ipynb
+
+# IPython
+profile_default/
+ipython_config.py
+
+# ============================================================================
+# DATA & OUTPUT FILES
+# ============================================================================
+# Excel temp files
+~$*.xlsx
+~$*.xls
+*.tmp
+
+# CSV outputs (except samples)
+*.csv
+!data/sample/*.csv
+
+# Large data files
+*.parquet
+*.feather
+*.h5
+*.hdf5
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Generated figures (recreated by scripts)
+reports/figures/*.png
+reports/figures/*.jpg
+reports/figures/*.pdf
+reports/figures/*.svg
+
+# Keep .gitkeep files
+!reports/figures/.gitkeep
+
+# ============================================================================
+# IDE & EDITORS
+# ============================================================================
+# VS Code
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# PyCharm
+.idea/
+.idea/*
+*.iml
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# ============================================================================
+# OPERATING SYSTEM
+# ============================================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================================================
+# CONFIGURATION & SECRETS
+# ============================================================================
+# Environment variables (may contain API keys)
+.env
+.env.local
+.env.*.local
+
+# Configuration files with secrets
+config/production.py
+config/secrets.json
+secrets/
+credentials/
+
+# SSH keys
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# ============================================================================
+# PROJECT-SPECIFIC
+# ============================================================================
+# Backup files
+*.bak
+*.backup
+backup/
+
+# Archived old versions
+archive/
+old/
+
+# Test outputs
+test_outputs/
+scratch/
+temp/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# ============================================================================
+# KEEP THESE FILES (EXCEPTIONS)
+# ============================================================================
+# Ensure these are tracked even if parent folder is ignored
+!data/sample/
+!data/sample/README.md
+!reports/samples/
+!reports/samples/README.md
+!.gitkeep
