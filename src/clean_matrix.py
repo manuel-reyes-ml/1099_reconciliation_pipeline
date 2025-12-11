@@ -42,21 +42,36 @@ def _normalize_ssn(value) -> str | pd.NA:
 
     """
 
-    Normalize SSN to a 9-digit string.
+    Normalize SSN to a 9-digit string for Matrix.
 
-    - Strips all non-digits
-    - Pads with leading zeros if needed
-    - Returns <NA> if no digits are found
+    Handles cases where Excel reads SSNs as floats, e.g.:
+        194362032.0 -> '194562032'
+        1.94362032e8 -> '194562032
+    
+    Logic:
+    - Convert to string, strip
+    - Remove all non-digits
+    - If we end up with more than 9 digits, keep only the first 9
+      (SSNs are 9 digtits by definitation)
+    - Pad with leading zeros if fewer than 9
 
     """
 
     if pd.isna(value):
         return pd.NA
     
-    digits = re.sub(r"\D", "", str(value))
+    text = str(value).strip()
+    if not text:
+        return pd.NA
+
+    digits = re.sub(r"\D", "", text) # keep only 0-9
     if not digits:
         return pd.NA
     
+    # If we got more than 9 digits (e.g. '1945620320' from '194562032.0'),
+    # just take the first 9. This is safe because SSNs are exactly 9 digits.
+    if len(digits) > 9:
+        digits = digits[:9]
 
     return digits.zfill(9)
 
@@ -106,6 +121,47 @@ def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFram
 
     cols = [c for c in keep if c in df.columns]
     return df[cols].copy()
+
+
+
+def _normalize_tax_code(value) -> str | pd.NA:
+
+    """
+    
+    Normalize Matrix tax code values.
+
+    Matrix examples:
+        '7 - Normal Distributions'
+        'G - Rollover'
+        '7'
+        ' G   -   Something '
+
+    We want just the primary code character: '7' or 'G'
+    
+    Logic:
+    - Convert to string, strip
+    - Remove leading 'CODE ' if it exists (defensive)
+    - Find the first alphanumeric [0-9A-Z] and return it (uppercase)
+    - If nothing found, return <NA>
+
+    """
+
+    if pd.isna(value):
+        return pd.NA
+    
+    text = str(value).strip()
+    if not text:
+        return pd.NA
+    
+    # Remove leading "code " if it ever appears
+    text = re.sub(r"^code\s*", "", text, flags=re.IGNORECASE)
+
+    # Find first alphanumeric code character
+    m = re.search(r"[0-9A-Z]", text.upper())
+    if not m:
+        return pd.NA
+    
+    return m.group(0) # e.g. '7', 'G'
 
 
 
@@ -193,21 +249,10 @@ def clean_matrix(
             .str.upper()
         )
     
-    # Tax codes
+    # Tax codes: extract primary code character (e.g. '7', 'G')
     for col in ["tax_code_1", "tax_code_2"]:
         if col in df.columns:
-            df[col] = (
-                df[col]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
-            # Optionally normalize things like 'CODE 7' -> '7'
-            df[col] = (
-                df[col]
-                .str.replace(" - NORMAL DISTRIBUTION", "", case=False)
-                .str.replace(r"[^0-9A-Z]", "", regex=True)
-            )
+            df[col] = df[col].apply(_normalize_tax_code)
     
     # Transaction method (ACH / Wire / Check)
     if "txn_method" in df.columns:
