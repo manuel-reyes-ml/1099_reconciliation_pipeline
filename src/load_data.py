@@ -11,7 +11,7 @@ Reponsible for:
 """
 
 from pathlib import Path
-from typing import Optional #For type hinting optional parameters
+from typing import Optional #For type hinting optional parameters | Describing the allowed types for an arg(variable)
 
 import pandas as pd #The main data manipulation library for data tables
 
@@ -28,6 +28,8 @@ from .config import (
 # source_name: str -> "should be" a string -- just used in error messages 
 # to say "Relius/Matrix is missing X column"
 # -> None indicates this function does not return anything (it just does checks/raises errors)
+#
+# _* prefix is a convention: "This is an internal helper, no part of the public API."
 def _validate_columns(df: pd.DataFrame, required_cols, source_name: str) -> None:
 
     """
@@ -56,9 +58,9 @@ def _validate_columns(df: pd.DataFrame, required_cols, source_name: str) -> None
 
 
 def load_relius_excel(
-        path: Optional[Path] = None,     # "Should be" either a Path object or None
+        path: Optional[Path] = None,     # Type hint: "Should be" either a Path object or None / Newer Python: path: Path | None = None
         use_sample_if_none: bool = True, # If path is None, load sample data
-        sheet_name: Optional[str] = 0,   # Which sheet to load from Excel file, default first sheet
+        sheet_name: Optional[str] = 0,   # Type hint: Which sheet to load from Excel file, default first sheet
 ) -> pd.DataFrame:                       # Returns a pandas DataFrame
     
     """
