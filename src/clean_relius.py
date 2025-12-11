@@ -148,10 +148,18 @@ def _classify_relius_dist_type(name: str | float | None) -> str:
     text = name.strip().lower()
     
     if "rollover" in text:
+        if "partial" in text:
+            return "partial_rollover"
         return "rollover"
     
-    if "rmd" in text or "recurring" in text or "liquidation" in text or "liquidate" in text:
-        return "cash"
+    if "rmd" in text:
+        return "rmd"
+    
+    if ("partial" in text and "liquidation") or "recurring" in text:
+        return "partial_cash"
+    
+    if "liquidation" in text and "full" in text:
+        return "final_cash"
     
     return "other"
 
@@ -232,7 +240,7 @@ def clean_relius(
 
     # Distribution name -> category
     if "dist_name" in df.columns:
-        # Apply _classify_relius_dist_type  to each valye in the 'dist_name' column
+        # Apply _classify_relius_dist_type  to each value in the 'dist_name' column
         # Store normalized category in new column 'dist_category_relius'
         df["dist_category_relius"] = df["dist_name"].apply(_classify_relius_dist_type)
 
