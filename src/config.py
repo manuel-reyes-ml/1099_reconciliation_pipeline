@@ -1,4 +1,4 @@
-#Docstring for config.py
+#Docstring for src/config module
 """
 
 Configuration for the 1099 reconciliation pipeline.
@@ -213,6 +213,7 @@ INHERITED_PLAN_IDS = {
 # A later module (e.g. business_rules.py or inside match_transactions.py) will
 # interpret and apply these to the matched DataFrame.
 
+""" --- Add Inherited Business Rules Config to match_transactions later on -----
 SPECIAL_CODE_RULES = [
     {
         # For inherited plans, a final distribution coded as 7M
@@ -234,12 +235,13 @@ SPECIAL_CODE_RULES = [
         "plan_ids": INHERITED_PLAN_IDS,
         "condition": "rollover_distribution",   # to be derived from dist_type / other flags
         "current_tax_code_1": {"7"},           # placeholder: whatever mis-code they currently use
-        "new_tax_code_1": "G",
-        "new_tax_code_2": "4",
+        "new_tax_code_1": "4",
+        "new_tax_code_2": "G",
         "action": "UPDATE_1099",
         "priority": "HIGH",
     },
 ]
+"""
 
 # In the future we can add more rule sets here, for other plan groups or logic.
 
