@@ -1,4 +1,4 @@
-# Docstring for src/load_data.py module
+# Docstring for src/load_data module
 """
 
 Data loading utilities for the 1099 reconciliation pipeline.
