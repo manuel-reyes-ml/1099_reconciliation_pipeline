@@ -1,3 +1,4 @@
+# Docstring for src/clean_matrix module
 """
 
 Cleaning and normalization for Matrix export data.
@@ -36,8 +37,12 @@ from .config import (
 
 
 
+# Refer to notes in src/clean_relius.py for better understanding in helpfer funtions...
+
 # --- Helper functions ------------------------------------------------------------
 
+# _normalize_ssn() works different than the one in clean_relius module
+#   matrix excel file read the SSN values as float (instead of str)
 def _normalize_ssn(value) -> str | pd.NA:
 
     """
@@ -124,6 +129,8 @@ def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFram
 
 
 
+# _normalize_tax_code() works different than on clean_relius module
+#   we have a combiation of digits (tax code) and strings in the same cell
 def _normalize_tax_code(value) -> str | pd.NA:
 
     """
@@ -230,11 +237,11 @@ def clean_matrix(
 
     # SSN
     if "ssn" in df.columns:
-        df["ssn"] = df["ssn"].apply(_normalize_ssn)
+        df["ssn"] = df["ssn"].apply(_normalize_ssn) # .apply() applies function to all values in Series df[...]
     
     # Dates
     if "txn_date" in df.columns:
-        df["txn_date"] = _parse_date(df["txn_date"])
+        df["txn_date"] = _parse_date(df["txn_date"]) # function takes a Series df[...] directly
     
     # Amounts
     if "gross_amt" in df.columns:
@@ -281,28 +288,57 @@ def clean_matrix(
     # 4) Filter out unwanted accounts and transaction types
 
     # Ignore specific Matrix accounts entirely
+    # mask_bad_acct receives a Series (vector of 1 column)
     if "matrix_account" in df.columns:
-        mask_bad_acct = df["matrix_account"].astype(str).isin(IGNORED_MATRIX_ACCOUNTS)
-    else:
-        mask_bad_acct = pd.Series(False, index=df.index)
+        # Assigns True if values are in IGNORED_MATRIX_ACCOUNTS (if any)
+        mask_bad_acct = df["matrix_account"].astype(str).isin(IGNORED_MATRIX_ACCOUNTS) # .isin() checks each row of the Series 
+    else:                                                                              # in the given Set or List.
+        # Creates a Series and assigns False to all rows (as a Series = 1 Column)
+        mask_bad_acct = pd.Series(False, index=df.index) # df.index represents all rows in the DataFrame
     
-    # Ignore rows where Transaction Type is in the excluded set
+
+    # Ignore rows where Transaction Type is in the excluded Set or List
     if "txn_method" in df.columns:
-        method_lower = df["txn_method"].astype(str).str.strip().str.lower()
+        # method_lower gets assigned a Series of 'tax_method' values in lower case
+        method_lower = df["txn_method"].astype(str).str.strip().str.lower() # normalize before comparing
         mask_bad_method = method_lower.isin(IGNORED_TXN_METHODS)
     else:
         mask_bad_method = pd.Series(False, index=df.index)
     
+    
+    # mask_bad_acct and mask_bad_method both are pandas Series of booleans indexed like df
+    # '|' in pandas is OR (logical computation) and will compare each row of the two Series
+    #   e.g.: T OR F = T ; F OR F =  F
+    #
+    # A Series of True or False will be assigned to mask_drop indexed like df
     mask_drop = mask_bad_acct | mask_bad_method
-    df = df[~mask_drop].copy()
+
+    # ~ is the bitwise NOT operator for boolean Series, it flips True <-> False,
+    #  so for mask_drop: [False, True, True]
+    #        ~mask_drop: [True, False, False]
+    #
+    # df[~mask_drop] us boolean indexing in pandas, so keep the rows where mask_drop is false (converted to True), meaning
+    #   rows that are not bad (not included on the two Lists or Sets above).
+    df = df[~mask_drop].copy() # create a new DataFrame
+
 
     # 5) Optionally drop rows missing key fields for matching
     match_key_cols = [c for c in MATRIX_MATCH_KEYS if c in df.columns]
     if drop_rows_missing_keys and match_key_cols:
-        df = df.dropna(subset=match_key_cols, how="any")
+        df = df.dropna(subset=match_key_cols, how="any") # Drops rows where the value has NaN/NA in 'any' of those key columns, when
+                                                         #  how='all' drops only when 'all' of the columns have NaN/NA.
+                                                         # 
+                                                         # By default .dropna(axis=0) to drop rows but you can use
+                                                         #  axis=1 to drop columns
     
+
     # 6) Drop duplicate rows based on match keys
     if match_key_cols:
-        df = df.drop_duplicates(subset=match_key_cols, keep="first")
+        df = df.drop_duplicates(subset=match_key_cols, keep="first") # Drops duplicate rows based only by the match_key_cols
+                                                                     # Keep only the first row
+                                                                     # .drop_duplicates() only works on rows not on columns
+                                                                     #   a trick is to transpose from columns to rows,
+                                                                     #   df.T swaps rows & columns (rows become columns), and then
+                                                                     #   we can use df.T.drop_duplicates().T, .T at the end to transpose again
 
     return df
