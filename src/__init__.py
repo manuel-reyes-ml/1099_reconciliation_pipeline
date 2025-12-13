@@ -16,8 +16,8 @@ This package contains the core modules for:
 __all__ = [
     "config",
     "load_data",
-    #"clean_relius",
-    #"clean__matrix",
+    "clean_relius",
+    "clean__matrix",
     #"match_transactions",
     #"build_correction_file",
 ]
