@@ -130,7 +130,7 @@ def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFram
 
 
 # _normalize_tax_code() works different than on clean_relius module
-#   we have a combiation of digits (tax code) and strings in the same cell
+#   we have a combination of digits (tax code) and strings in the same cell
 def _normalize_tax_code(value) -> str | pd.NA:
 
     """
@@ -160,15 +160,68 @@ def _normalize_tax_code(value) -> str | pd.NA:
     if not text:
         return pd.NA
     
+
     # Remove leading "code " if it ever appears
+    # re.sub(pattern, repl, string): find all matches of regex 'pattern' in 'string' and replace with 'repl'
+    #  flags=re.IGNORECASE make the match case insentitive
+    # r"..." tells Python don't treat backlashes as special scape characters; pass them straight to the regex engine,
+    #   so, \s inside the string is really the regex \s(whitespace character: space, tab, newline, etc.). 
+    # '^' means: match only if this is at the beggining of the string.
+    # '*' in \s* means match whitespace in 0 or more spaces
     text = re.sub(r"^code\s*", "", text, flags=re.IGNORECASE)
 
-    # Find first alphanumeric code character
+    # Find first alphanumeric code character: re.search(pattern, string) - if found returns match object, if not returns None.
+    # [0-9A-Z]: find any single digit from 0 to 9 or any single uppercase letter from A to Z.
     m = re.search(r"[0-9A-Z]", text.upper())
     if not m:
         return pd.NA
     
+    # .group(0) returns the 'full match' from the match object returned by re.search()
     return m.group(0) # e.g. '7', 'G'
+
+
+
+# We have an extra digit in the values, due to Matrix reading them as floats
+def _normalize_transaction_id(value) -> str | pd.NA:
+
+    """
+    
+    Normalize Transaction ID values.
+
+    Matrix reads them as floats, examples when getting to DataFrame:
+        '44324568' -> 44324568.0
+
+    We want just the original transaction ID, without the decimal 0
+    
+    Logic:
+    - Convert to string, strip
+    - Find the first numeric digits '\d' before the ending 0 and return it
+    - If nothing found, return <NA>
+
+    """
+
+    if pd.isna(value):
+        return pd.NA
+    
+    text = str(value).strip()
+    if not text:
+        return pd.NA
+    
+    text = re.sub(r"\D","",text)
+    if not text:
+        return pd.NA
+    
+
+    # Find first numeric code characters before the ending 0: re.search(pattern, string) - if found returns match object, if not returns None.
+    # '(\d+): find any numerical digits (1 or more) and extract this part
+    # '0$': stop to extract when you reach literal '0'(zero)
+    m = re.search(r"(\d+)0$", text)
+    if not m:
+        return pd.NA
+    
+    
+    # .group(1) returns the part (...) from the match object returned by re.search()
+    return m.group(1) # e.g. '12345'
 
 
 
@@ -260,6 +313,10 @@ def clean_matrix(
     for col in ["tax_code_1", "tax_code_2"]:
         if col in df.columns:
             df[col] = df[col].apply(_normalize_tax_code)
+
+    # Transaction IDs: extract transaction id from float format (e.g. 44324566.0 -> '44324566')
+    if "transaction_id" in df.columns:
+        df["transaction_id"] = df["transaction_id"].apply(_normalize_transaction_id)
     
     # Transaction method (ACH / Wire / Check)
     if "txn_method" in df.columns:
