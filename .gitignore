@@ -18,7 +18,7 @@
 !data/sample/README.md
 
 # Real output files (may contain sensitive info)
-reports/outputs/
+reports/outputs/*.xlsx
 reports/*.xlsx
 reports/*.csv
 
