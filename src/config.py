@@ -253,3 +253,23 @@ SPECIAL_CODE_RULES = [
 # If you ever want to quickly swap between sample data and "real" exports
 # in your notebooks or scripts, you can use this flag as a default.
 USE_SAMPLE_DATA_DEFAULT = True
+
+
+
+@dataclass(frozen=True)
+class AgeTaxCodeConfig:
+
+    """
+    
+    Configuration for age-based 1099-R tax-code rules.
+
+    """
+
+    normal_age_years: float = 59.5       # 59 1/2 riles -> code 7
+    term_rule_age_years: float = 55.0    # separation of service after 55 -> code 2
+    normal_dist_code: str = "7"          # age >= 59.5 at distribution
+    under_55_code: str = "1"             # early distribution, no exception
+    age_55_plus_code: str = "2"          # early distribution, 55+ rule
+
+
+AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
