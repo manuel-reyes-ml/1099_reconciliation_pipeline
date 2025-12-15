@@ -82,6 +82,7 @@ class MatchingConfig:
     amount_tolerance_cents: int = 100  # $1.00 tolerance
     max_date_lag_days: int = 10        # up to 10 days after export
 
+
 MATCHING_CONFIG = MatchingConfig()
 #Creates a singleton instance of MatchingConfig with default values
 #For example, to access amount_tolerance_cents:
@@ -270,6 +271,13 @@ class AgeTaxCodeConfig:
     normal_dist_code: str = "7"          # age >= 59.5 at distribution
     under_55_code: str = "1"             # early distribution, no exception
     age_55_plus_code: str = "2"          # early distribution, 55+ rule
+
+    # Codes that should be excluded from age-based logic
+    # (rollovers from traditional and Roth plans, etc.)
+    excluded_codes: tuple[str, ...] = ("G", "H", "11", "13",
+                                       "15", "16", "17", "18",
+                                       "19", "33"
+                                    )
 
 
 AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
