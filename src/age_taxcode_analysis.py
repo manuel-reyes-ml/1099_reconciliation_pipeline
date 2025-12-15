@@ -5,13 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from dataclasses import dataclass
-from http.client import REQUEST_HEADER_FIELDS_TOO_LARGE
-from os import error
 from typing import Optional
 
 import pandas as pd
 
-from .config import AGE_TAXCODE_CONFIG
+from .config import AGE_TAXCODE_CONFIG, INHERITED_PLAN_IDS
 
 
 
@@ -210,6 +208,12 @@ def run_age_taxcode_analysis(
                 - if age at distribution (2025) < 55  -> code 1
                 - if age at distribution (2025) >= 55 -> code 2
         
+        Additional constraints specific to this engine:
+
+            - Exclude Matrix rows where tax_code_1 indicates a rollover (G,H).
+            - Exclude plans that are in INHERITED_PLAN_IDS, since those are
+              handled by the inherited-plan engine (code 4 / 4+G).
+        
         Returns a DataFrame that is compatible with build_correction_dataframe():
             - includes 'tax_code_1'
             - includes 'suggested_tax_code_1' / 'suggested_tax_code_2'
@@ -222,6 +226,24 @@ def run_age_taxcode_analysis(
     # 1) Attached demographics (DOB, termm_date, names) to Matrix data
     df = attach_demo_to_matrix(matrix_df, relius_demo_df)
 
+
+    # -----------------------------------------------------------------------------
+    # A) Determine which rows are EXCLUDED from this age-based engine:
+    #   - rollovers cods G / H
+    #   - inherited-plan IDs (handled by other engine)
+    # -----------------------------------------------------------------------------
+
+    # tax_code_1 should already be normalized by clean_matrix, but we
+    # enforce string + strip defensively.
+    tax1_norm = df["tax_code_1"].astype(str).str.strip().fillna("")
+    df["tax_code_1"] = tax1_norm                                                   # keep normalized verion
+
+    mask_rollover_code = tax1_norm.isin(cfg.excluded_codes)
+    mask_inherited_plan = df["plan_id"].isin(INHERITED_PLAN_IDS)
+
+    df["age_engine_excluded"] = mask_rollover_code | mask_inherited_plan
+
+
     # 2) Compute ages
     df["age_at_distribution"] = _compute_age_years(df["dob"], df["txn_date"])
     df["age_at_termination"] = _compute_age_years(df["dob"], df["term_date"])
@@ -232,20 +254,34 @@ def run_age_taxcode_analysis(
     df["correction_reason"] = pd.NA
     df["action"] = pd.NA
 
+
     # This is an independent engine, so we defined a local-style "match_satus"
     #   that build_correction_dataframe can use just in the inherited flow.
+    #
+    # Default match_status:
+    # - excluded rows: explicit explanation
+    # - others: "insufficient_data" unless rules assign something better
     df["match_status"] = "age_rule_insufficient_date"
+    df.loc[df["age_engine_excluded"], "match_status"] = (
+        "excluded_from_age_engine_rollover_or_inherited"
+    )
+
 
     has_dob = df["age_at_distribution"].notna()
     has_term = df["age_at_termination"].notna()
+    eligible = ~df["age_engine_excluded"]                                           # rows we are allowed to modify
 
     # 5) Rule 1 - age > 59.5 at distribution -> code 7 (normal)
-    mask_normal = has_dob & (df["age_at_distribution"] >= cfg.normal_age_years)
+    mask_normal = (
+        eligible 
+        & has_dob
+        & (df["age_at_distribution"] >= cfg.normal_age_years)
+    )
     df.loc[mask_normal, "expected_tax_code_1"] = cfg.normal_dist_code
     df.loc[mask_normal, "correction_reason"] = "age_59_5_or_over_normal_distribution"
 
     # 5) Rule 2 - age < 59.5 at distribution
-    mask_under_595 = has_dob & ~mask_normal
+    mask_under_595 = eligible & has_dob & ~mask_normal
 
     # 5.1) with term date (termination rule)
     mask_under_595_with_term = mask_under_595 & has_term
