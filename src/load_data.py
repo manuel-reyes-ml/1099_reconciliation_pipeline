@@ -1,14 +1,68 @@
 # Docstring for src/load_data module
 """
+load_data.py
 
-Data loading utilities for the 1099 reconciliation pipeline.
+Input loader utilities for Relius and Matrix Excel exports.
 
-Reponsible for:
-- Reading raw Relius and Matrix Excel exports into pandas DataFrames
-- Doing basic sanity checks (e.g., required columns exist)
-- Leaving cleaning / renaming to the cleaning modules
+This module provides thin, predictable I/O functions to read Excel files into
+pandas DataFrames, with minimal transformation. The intent is to centralize file
+loading concerns (paths, dtype handling, sheet selection) separately from the
+cleaning logic implemented in `clean_relius.py` and `clean_matrix.py`.
 
+Design goals
+------------
+- Separation of concerns: keep file I/O distinct from normalization and business logic.
+- Repeatability: ensure the same input file reads consistently across environments.
+- Flexibility: allow configuration of sheet name, header row, and dtype rules when needed.
+- Compatibility: return raw DataFrames ready to be passed into cleaning modules.
+
+Inputs
+------
+- Excel files (.xlsx) exported from operational systems:
+  - Relius exports (distribution transactions, participant master, etc.)
+  - Matrix exports (disbursement/1099 distribution activity)
+
+Core behavior
+-------------
+- Read Excel using pandas `read_excel()` with sensible defaults:
+  - dtype=str for ID-like fields (SSN, plan IDs, transaction IDs) to prevent loss
+    of leading zeros or float coercion.
+- Optional parameters support common Excel variations:
+  - sheet_name (default first sheet)
+  - header row index
+  - engine selection if needed (openpyxl)
+
+Outputs
+-------
+- Pandas DataFrames representing the raw Excel content.
+
+Typical usage
+-------------
+These loaders are commonly used indirectly via cleaning functions, but can be
+useful in notebooks during EDA:
+
+    from src.load_data import load_matrix_excel, load_relius_excel
+    from src.clean_matrix import clean_matrix
+    from src.clean_relius import clean_relius
+
+    matrix_raw = load_matrix_excel("data/raw/matrix.xlsx")
+    matrix_clean = clean_matrix("data/raw/matrix.xlsx")  # (clean_matrix may call loader internally)
+
+Public API
+----------
+- load_matrix_excel(path: str | Path, sheet_name=0, header=0, dtype=str) -> pd.DataFrame
+- load_relius_excel(path: str | Path, sheet_name=0, header=0, dtype=str) -> pd.DataFrame
+
+Optional helpers
+----------------
+- load_excel(path, ...) generic loader used by the two public functions.
+
+Privacy / compliance note
+-------------------------
+Never commit real exports to source control. Repository sample files must be
+synthetic or masked. Production runs should read files from secure locations.
 """
+
 
 from pathlib import Path
 from typing import Optional #For type hinting optional parameters | Describing the allowed types for an arg(variable)

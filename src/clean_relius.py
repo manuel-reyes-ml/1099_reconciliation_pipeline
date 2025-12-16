@@ -1,21 +1,101 @@
 # Docstring for src/clean_relius module
 """
+clean_relius.py
 
-Cleaning and normalization for Relius export data.
+Cleaning and normalization for Relius distribution export data.
 
-This module:
+This module reads a Relius Excel export (typically a high-column-count operational
+report) and transforms it into a canonical, analysis-ready pandas DataFrame used by:
 
-- Renames raw Relius columns to canonical names using config.RELIUS_COLUMN_MAP
-- Keeps only the core columns defined in config.RELIUS_CORE_COLUMNS
-- Cleans and normalizes:
-    - SSN (9-digit string)
-    - Dates (exported_date -> datetime.date)
-    - Amounta (gross_amt -> float)
-    - Codes (dist_code_1 -> uppercase, stripped string)
-- Deries a normalized distribution category from DISTRNAM ("dist_name")
-- Drops duplicate rows based on config.RELIUS_MATCH_KEYS
+- The inherited-plan reconciliation engine (`match_transactions.py`)
+- Downstream correction-file generation (`build_correction_file.py`)
+- Optional analytics / reporting notebooks (EDA, match-rate KPIs)
 
+The intent is to reduce a large and inconsistent export into a stable schema with
+reliable keys, normalized datatypes, and a derived distribution category that
+supports business-rule decisions (e.g., rollover vs cash distribution).
+
+Design goals
+------------
+- Canonical schema: standardize column names and datatypes so downstream matching
+  logic is consistent and maintainable.
+- Data quality: normalize SSNs, dates, and amounts to reduce false mismatches.
+- Business interpretability: derive a distribution category from `DISTRNAM`
+  (distribution description) to support rules and reporting.
+- Traceability: retain Relius transaction identifiers and plan-level fields for
+  auditing and troubleshooting.
+
+Inputs
+------
+- Relius Excel export (.xlsx) containing distribution transactions.
+  Column names may vary by export; mapping is controlled via `config.RELIUS_COLUMN_MAP`.
+
+Core transformations
+--------------------
+1) Column standardization
+   - Rename raw Relius headers to canonical names using `config.RELIUS_COLUMN_MAP`.
+   - Keep only columns defined in `config.RELIUS_CORE_COLUMNS` (plus any required
+     identifiers such as `trans_id_relius`).
+
+2) Field normalization
+   - SSN (`ssn`):
+       Normalize to a 9-digit string: strip non-digits, handle Excel float-like
+       strings, truncate >9 digits, left pad via zfill(9), invalid -> <NA>.
+   - Dates (`exported_date`):
+       Parse with pandas and coerce invalid values to NaT; store as date-only.
+       This date is used as the “source” date for timing tolerance vs Matrix
+       transaction date (Matrix occurs on/after Relius export date).
+   - Amounts (`gross_amt`):
+       Convert to numeric via `pd.to_numeric(errors="coerce")`.
+   - Distribution code (`dist_code_1`):
+       Clean to a standardized uppercase/stripped string.
+
+3) Derived fields
+   - Distribution category (`dist_category_relius`):
+       Derived from `dist_name` (Relius `DISTRNAM`) using configurable keyword
+       mapping rules. Typical categories include:
+         - rollover
+         - cash_distribution
+         - rmd
+         - partial_liquidation
+       This category enables downstream business logic (e.g., inherited plan
+       coding, rollover identification, etc.).
+
+4) Deduplication
+   Drop duplicate rows using `config.RELIUS_MATCH_KEYS` (or a conservative subset
+   that includes stable identifiers like `trans_id_relius` when available).
+
+Expected output schema (canonical)
+----------------------------------
+Typical canonical columns produced by this module include:
+
+- plan_id
+- ssn
+- first_name
+- last_name
+- state
+- gross_amt
+- exported_date
+- dist_code_1
+- dist_name
+- dist_category_relius
+- trans_id_relius
+- tax_year (when available in export)
+
+Public API
+----------
+- clean_relius(path: str | Path) -> pd.DataFrame
+    Main entrypoint. Returns a cleaned Relius distribution DataFrame ready for
+    reconciliation against Matrix.
+
+Privacy / compliance note
+-------------------------
+This repository is designed for portfolio use with synthetic or masked data.
+Never commit real participant PII (SSNs, names, addresses) to source control.
+The production implementation should run only in secure environments with proper
+access controls and retention policies.
 """
+
 
 # Tells Python not to execute type hints as real code now. Treat them more like comments/strings and
 # it will resolve it later

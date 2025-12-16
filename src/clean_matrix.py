@@ -1,26 +1,102 @@
 # Docstring for src/clean_matrix module
 """
+clean_matrix.py
 
-Cleaning and normalization for Matrix export data.
+Cleaning and normalization for Matrix distribution export data.
 
-This module:
+This module reads a Matrix Excel export and transforms it into a canonical,
+analysis-ready pandas DataFrame that can be used by:
 
-- Renames raw Matrix columns to canonical names using config.MATRIX_COLUMN_MAP
-- Keeps only the core columns defined in config.MATRIX_CORE_COLUMNS
-- Cleans and normalizes:
-    - SSN (9-digit string)
-    - Dates (txn_date -> datetime.date)
-    - Amounts (gross_amt -> float)
-    - Tax codes (tax_code_1 / tax_code_2 -> uppercase, stripped)
-    - State and text fields (stripped)
-- Filters out rows that are NOT useful for Relius distribution matching:
-    - Matrix accounts in {07N00442, 07I00442, 07M00442}
-    - Transaction Type in
-        {Account Transfer, Suspense Transfer,
-        ACH Distribution Reject, Check Stop}
-- Drops duplicate rows based on config.MATRIX_MATCH_KEYS
+- The inherited-plan reconciliation engine (`match_transactions.py`)
+- The age-based tax-code engine (`age_taxcode_analysis.py`)
+- Downstream reporting / correction file generation (`build_correction_file.py`)
 
+The goal is to convert a messy operational export (mixed types, inconsistent
+formats, non-distribution rows) into a stable schema with reliable keys.
+
+Design goals
+------------
+- Canonical schema: normalize column names and datatypes so downstream logic
+  can be consistent across files and tax years.
+- Data quality: enforce repeatable normalization for SSNs, dates, amounts, and
+  tax codes to reduce false mismatches.
+- Noise reduction: remove non-distribution transactions and known accounts that
+  should not participate in matching/correction workflows.
+- Traceability: keep identifiers (Transaction Id) and key operational fields for
+  auditability.
+
+Inputs
+------
+- Matrix Excel export (.xlsx) containing distribution activity.
+  Column names may vary by export; mapping is controlled via `config.MATRIX_COLUMN_MAP`.
+
+Core transformations
+--------------------
+1) Column standardization
+   - Rename raw Matrix headers to canonical names using `config.MATRIX_COLUMN_MAP`.
+   - Keep only columns defined in `config.MATRIX_CORE_COLUMNS` (plus any required
+     identifiers for matching and correction output).
+
+2) Field normalization
+   - SSN (`ssn`):
+       Normalize to a 9-digit string: strip non-digits, handle Excel float-like
+       strings, truncate >9 digits, left pad via zfill(9), invalid -> <NA>.
+   - Dates (`txn_date`):
+       Parse with pandas and coerce invalid values to NaT; store as date-only.
+   - Amounts (`gross_amt`):
+       Convert to numeric via `pd.to_numeric(errors="coerce")`.
+   - Tax codes (`tax_code_1`, `tax_code_2`):
+       Normalize to 1–2 leading characters (e.g., "7", "11", "G", "H") from
+       strings like "7 - Normal Distribution". This prevents accidental truncation
+       and supports multi-digit codes.
+   - Text fields (participant name, state, plan_id, transaction type):
+       Strip whitespace and standardize casing where appropriate.
+
+3) Filtering (noise reduction)
+   Filter out rows that are not meaningful for distribution matching/corrections:
+   - Matrix accounts excluded (configurable):
+       e.g., {"07B00442", "07I00442", "07M00442"}
+   - Transaction types excluded (configurable):
+       e.g., {"Account Transfer", "Suspense Transfer", "ACH Distribution Reject", "Check Stop"}
+
+4) Deduplication
+   Drop duplicate rows using `config.MATRIX_MATCH_KEYS` (or a conservative subset
+   that includes stable identifiers like `transaction_id` when available).
+
+Expected output schema (canonical)
+----------------------------------
+Typical canonical columns produced by this module include:
+
+- plan_id
+- matrix_account
+- transaction_id
+- txn_date
+- txn_method (transaction type)
+- ssn
+- participant_name
+- state
+- gross_amt
+- tax_code_1
+- tax_code_2
+
+Downstream engines may require additional fields depending on workflow, but
+the above set forms the "core" operational schema.
+
+Public API
+----------
+- clean_matrix(path: str | Path) -> pd.DataFrame
+    Main entrypoint. Returns a cleaned DataFrame ready for matching/correction engines.
+
+- (optional helper functions)
+    Internal helpers may include SSN and tax code normalization functions.
+
+Privacy / compliance note
+-------------------------
+This project is designed for portfolio use with synthetic or masked data. Never
+commit real participant PII (SSNs, names, addresses) to source control. Run the
+production version only in secure environments with appropriate access controls.
 """
+
 
 from __future__ import annotations
 
@@ -142,8 +218,9 @@ def _normalize_tax_code(value) -> str | pd.NA:
         'G - Rollover'
         '7'
         ' G   -   Something '
+        '11 - Participant Loan Secured By Benefits'
 
-    We want just the primary code character: '7' or 'G'
+    We want just the primary code character: '7', '11' or 'G'
     
     Logic:
     - Convert to string, strip
@@ -168,16 +245,32 @@ def _normalize_tax_code(value) -> str | pd.NA:
     #   so, \s inside the string is really the regex \s(whitespace character: space, tab, newline, etc.). 
     # '^' means: match only if this is at the beggining of the string.
     # '*' in \s* means match whitespace in 0 or more spaces
-    text = re.sub(r"^code\s*", "", text, flags=re.IGNORECASE)
+    """text = re.sub(r"^code\s*", "", text, flags=re.IGNORECASE)"""
 
     # Find first alphanumeric code character: re.search(pattern, string) - if found returns match object, if not returns None.
     # [0-9A-Z]: find any single digit from 0 to 9 or any single uppercase letter from A to Z.
-    m = re.search(r"[0-9A-Z]", text.upper())
+    """m = re.search(r"[0-9A-Z]", text.upper())
+    if not m:
+        return pd.NA"""
+    
+
+    # -----------------------------------------------------------------------------
+    # A) Test new code to extract two alphanumeric digits from raw tax code field
+    #   - Curent code only take out 1 alphanumeric from the 'text'
+    #   - Some tax codes have two digits, '11'
+    # -----------------------------------------------------------------------------
+    
+    # Capture 1 or 2 alphanumeric chars at the start of the string
+    # '^\s*' -> skip any leading whitespace at the start of the string.
+    # (..)   -> capturing group
+    # [A-Za-z0-9]{1,2} -> capturing 1-2 alphanumeric characters (upper and lower case)
+    m = re.match(r"^\s*([A-Za-z0-9]{1,2})", text)
     if not m:
         return pd.NA
-    
+
     # .group(0) returns the 'full match' from the match object returned by re.search()
-    return m.group(0) # e.g. '7', 'G'
+    # .group(1) returns the first group in parenthesis ()
+    return m.group(1) # e.g. '7', 'G'
 
 
 
