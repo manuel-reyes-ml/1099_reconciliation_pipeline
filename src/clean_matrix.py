@@ -45,10 +45,14 @@ Core transformations
        Parse with pandas and coerce invalid values to NaT; store as date-only.
    - Amounts (`gross_amt`):
        Convert to numeric via `pd.to_numeric(errors="coerce")`.
+   - Fed taxable amount (`fed_taxable_amt`):
+       Convert to numeric via the same coercion as gross amount.
    - Tax codes (`tax_code_1`, `tax_code_2`):
        Normalize to 1–2 leading characters (e.g., "7", "11", "G", "H") from
        strings like "7 - Normal Distribution". This prevents accidental truncation
        and supports multi-digit codes.
+   - Roth initial contribution year (`roth_initial_contribution_year`):
+       Convert to numeric and store as pandas nullable integer (Int64).
    - Text fields (participant name, state, plan_id, transaction type):
        Strip whitespace and standardize casing where appropriate.
 
@@ -392,6 +396,16 @@ def clean_matrix(
     # Amounts
     if "gross_amt" in df.columns:
         df["gross_amt"] = _to_float(df["gross_amt"])
+
+    if "fed_taxable_amt" in df.columns:
+        df["fed_taxable_amt"] = _to_float(df["fed_taxable_amt"])
+
+    if "roth_initial_contribution_year" in df.columns:
+        df["roth_initial_contribution_year"] = (
+            pd.to_numeric(df["roth_initial_contribution_year"], errors="coerce").astype("Int64")
+        )
+        # Int64 is pandas’ nullable integer dtype. It holds real integers and a proper missing value (<NA>) in the same column.
+        #  You can still do numeric operations/filters cleanly while preserving missingness.
 
     # State
     if "state" in df.columns:
