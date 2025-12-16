@@ -4,16 +4,38 @@ clean_relius_roth_basis.py
 
 Cleaning and normalization for Relius Roth basis export data.
 
-This module reads a Relius Roth basis Excel export and produces a canonical
-DataFrame with reliable identifiers and datatypes for Roth-specific analytics.
+This module reads a Relius Roth basis Excel export and transforms it into a
+canonical, analysis-ready pandas DataFrame for Roth basis analytics and
+downstream matching.
 
 Inputs
 ------
 - Relius Excel export (.xlsx) with columns:
     PLANID, SSNUM, LASTNAM, FIRSTNAM, FIRSTTAXYEARROTH, Total
 
-Outputs (canonical columns)
----------------------------
+Core transformations
+--------------------
+1) Column standardization
+   - Rename raw Relius headers to canonical names.
+   - Keep only columns needed for Roth basis analytics.
+
+2) Field normalization
+   - SSN (`ssn`):
+       Normalize to a 9-digit string: strip non-digits, left pad via zfill(9),
+       invalid -> <NA>.
+   - First Roth tax year (`first_roth_tax_year`):
+       Convert to pandas nullable integer (Int64) to preserve missingness.
+   - Roth basis amount (`roth_basis_amt`):
+       Convert to numeric via `pd.to_numeric(errors="coerce")`.
+   - Text fields (plan_id, first_name, last_name):
+       Strip whitespace.
+
+3) Deduplication
+   - Drop duplicates on (plan_id, ssn) while keeping the row with the most
+     non-null year/basis data.
+
+Expected output schema (canonical)
+----------------------------------
 - plan_id
 - ssn
 - first_name
@@ -21,13 +43,15 @@ Outputs (canonical columns)
 - first_roth_tax_year
 - roth_basis_amt
 
-Key normalization steps
------------------------
-- SSN: normalize to a 9-digit string (digits only, left-padded).
-- First Roth tax year: pandas nullable integer (Int64) to keep missing values as <NA>.
-- Roth basis amount: numeric via `pd.to_numeric(errors="coerce")`.
-- Deduplicate by (plan_id, ssn), keeping the most complete record (prefer non-null
-  basis/year values).
+Public API
+----------
+- clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame
+
+Privacy / compliance note
+-------------------------
+This project is designed for portfolio use with synthetic or masked data. Never
+commit real participant PII (SSNs, names, addresses) to source control. Run the
+production version only in secure environments with proper access controls.
 """
 
 from __future__ import annotations
@@ -71,6 +95,13 @@ def _normalize_ssn(value) -> str | pd.NA:
         return pd.NA
 
     return digits.zfill(9)
+
+
+def _to_float(series: pd.Series) -> pd.Series:
+
+    """Convert amounts to float with coercion for non-numeric noise."""
+
+    return pd.to_numeric(series, errors="coerce")
 
 
 def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFrame:
@@ -117,7 +148,7 @@ def clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame:
         )
 
     if "roth_basis_amt" in df.columns:
-        df["roth_basis_amt"] = pd.to_numeric(df["roth_basis_amt"], errors="coerce")
+        df["roth_basis_amt"] = _to_float(df["roth_basis_amt"])
 
     # 4) Deduplicate by identifiers, keeping the row with the most non-null signals
     if {"plan_id", "ssn"} <= set(df.columns):
