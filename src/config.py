@@ -1,17 +1,80 @@
 #Docstring for src/config module
 """
+config.py
 
-Configuration for the 1099 reconciliation pipeline.
+Central configuration for the 1099 reconciliation and correction pipeline.
 
-Central place for:
-- Directory Paths
-- Matching tolerances
-- Column names mappings (raw Excel -> canonical names)
-- Core columns to keep from wide exports
-- Match key columns for de-duplication and reconciliation
-- Business rule configuration (inherited plans, code fixes, etc.)
+This module defines canonical column mappings, core column selections, match keys,
+tolerance thresholds, and business-rule parameters used across the project.
 
+It is intentionally the single source of truth for:
+- Column standardization (raw export headers -> canonical names)
+- Required/optional core columns per system (Relius, Matrix)
+- Matching strategy controls (keys, date tolerance)
+- Business logic parameters for correction engines
+  - Inherited-plan reconciliation rules
+  - Age-based tax-code rules (including Roth plan handling)
+
+Design goals
+------------
+- Consistency: all modules rely on the same canonical names and thresholds.
+- Maintainability: business rules and tolerances are edited in one place.
+- Clarity: separate system mappings (Matrix vs Relius) from engine settings.
+- Safety: defaults should avoid false positives (conservative matching).
+
+Contents
+--------
+1) Paths and project defaults (optional)
+   - Default input/output folders
+   - Template file paths for correction outputs
+
+2) Column mappings
+   - MATRIX_COLUMN_MAP: raw Matrix header -> canonical column name
+   - RELIUS_COLUMN_MAP: raw Relius header -> canonical column name
+   These mappings allow exports with inconsistent headers to be normalized.
+
+3) Core columns
+   - MATRIX_CORE_COLUMNS: minimal set used for matching/correction outputs
+   - RELIUS_CORE_COLUMNS: minimal set used for matching/logic
+
+4) Matching configuration
+   - MATRIX_MATCH_KEYS / RELIUS_MATCH_KEYS / MATCH_KEYS:
+       columns used to identify candidate matches (e.g., plan_id, ssn, gross_amt)
+   - MAX_DELAY_DAYS:
+       asymmetric date tolerance (Matrix txn_date must be >= Relius exported_date
+       and <= exported_date + MAX_DELAY_DAYS)
+
+5) Business rules configuration
+   A) Inherited-plan engine
+      - INHERITED_PLAN_IDS
+      - Distribution category mapping based on Relius `DISTRNAM`
+      - Expected tax codes for inherited cash vs rollover distributions
+      - Any special-case overrides (optional)
+
+   B) Age-based engine
+      - AGE_TAXCODE_CONFIG (dataclass)
+        * age thresholds (59.5, 55)
+        * expected codes for non-Roth (7/2/1)
+        * excluded rollover codes (G/H)
+      - Roth plan patterns:
+        * plan_id starts with "300005"
+        * plan_id ends with "R"
+        For Roth plans: code1 must be "B" and code2 computed from age rules.
+
+Usage
+-----
+All other modules import configuration from here. Example:
+
+    from src.config import MATRIX_COLUMN_MAP, MAX_DELAY_DAYS, AGE_TAXCODE_CONFIG
+
+Privacy / compliance note
+-------------------------
+This repository is intended to run with synthetic/masked data in public form.
+Do not store or embed real participant identifiers in configuration. Any
+production-only values (paths, credentials, internal IDs) should be provided via
+environment variables or excluded local config files.
 """
+
 
 from dataclasses import dataclass #create simple classes for configuration
 from pathlib import Path #object-oriented filesystem paths instead of strings

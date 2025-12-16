@@ -1,19 +1,100 @@
 # Docstring for src/build_correction_file module
 """
+build_correction_file.py
 
-Build a Matrix 1099 correction file from matched Relius/Matrix data.
+Generate an Excel-ready 1099 correction dataset for Matrix from analysis outputs.
 
-Usage in code / notebooks:
-    from src.buil_correction_file import build_correction_dataframe, write_correction_file
+This module converts an "analysis results" DataFrame (produced by either:
+- the inherited-plan reconciliation engine in `match_transactions.py`, or
+- the age-based correction engine in `age_taxcode_analysis.py`)
+into a standardized correction DataFrame and writes it to an Excel file.
 
+The intent is to produce a business-facing deliverable that operations teams can
+use to submit **1099-R tax code corrections** in Matrix, while keeping the logic
+portable and reusable across different correction workflows.
+
+Key design principles
+---------------------
+- Matrix-centric output: the correction file is driven by Matrix identifiers and
+  fields needed to action updates (Transaction Id, Transaction Date, SSN, Name,
+  Matrix Account).
+- Engine-agnostic: any upstream engine can feed this module as long as it
+  provides the expected canonical columns (see below).
+- Safety and traceability: include both "current" and "suggested" tax codes,
+  along with action / reason fields when available.
+
+Expected input schema (minimum)
+-------------------------------
+The input DataFrame (often named `matches` or `analysis_df`) should include:
+
+Required for filtering:
+- match_status:
+    Must contain "match_needs_correction" for rows that should be exported.
+- suggested_tax_code_1:
+    Proposed Tax Code 1 to apply in Matrix (non-null for correction rows).
+
+Required for Matrix correction output:
+- transaction_id:
+    Matrix Transaction Id (unique identifier in Matrix).
+- txn_date:
+    Matrix Transaction Date.
+- ssn:
+    Participant SSN (normalized to a 9-digit string).
+- full_name OR participant_name:
+    Participant name to display in the correction file.
+- matrix_account:
+    Matrix Account identifier (when available / required by template).
+
+Optional but recommended:
+- tax_code_1, tax_code_2:
+    Current Matrix tax codes for comparison and auditability.
+- suggested_tax_code_2:
+    Proposed Tax Code 2 (used for Roth or multi-code scenarios).
+- action:
+    e.g., "UPDATE_1099"
+- correction_reason:
+    Machine-readable reason for the recommendation.
+- plan_id:
+    Useful for review and filtering, even if not required by the Matrix template.
+
+Outputs
+-------
+- build_correction_dataframe(matches, allowed_actions=None) -> pd.DataFrame
+    Returns a standardized DataFrame containing only actionable correction rows,
+    with columns aligned to the Matrix correction template (or a close
+    Excel-ready representation of it).
+
+- write_correction_file(corrections_df, template_path=None, output_path=None) -> str
+    Writes the correction DataFrame to an Excel file (optionally into a provided
+    Matrix template). Returns the final output file path.
+
+Usage (notebooks / scripts)
+---------------------------
+Example: inherited-plan reconciliation output -> correction file
+
+    from src.build_correction_file import build_correction_dataframe, write_correction_file
+
+    # primary_matches is the filtered, in-tolerance result from match_transactions
     corrections_df = build_correction_dataframe(primary_matches)
     output_path = write_correction_file(corrections_df)
 
-This module is intentionally focused on the Matrix side:
-- We only export Matrix transaction identifiers and participant info
-- We include both current and suggested tax code
+Example: age-based correction output -> correction file
 
+    from src.build_correction_file import build_correction_dataframe, write_correction_file
+    from src.age_taxcode_analysis import run_age_taxcode_analysis
+
+    analysis_df = run_age_taxcode_analysis(matrix_clean, relius_demo)
+    corrections_df = build_correction_dataframe(analysis_df)
+    output_path = write_correction_file(corrections_df)
+
+Privacy / compliance note
+-------------------------
+This repository is designed to operate with synthetic or masked data for
+portfolio use. Never commit real participant PII (SSNs, DOBs, etc.) to source
+control. The production version should run only in secure, access-controlled
+environments.
 """
+
 
 from __future__ import annotations      # Tells Python to store type hints as strings rather than real objects at import time.
 
@@ -111,6 +192,7 @@ def build_correction_dataframe(
         "Current Tax Code 2",
         "New Tax Code 1",
         "New Tax Code 2",
+        "New Tax Code 1+2",
         "Reason",
         "Action",
     ]
@@ -150,6 +232,10 @@ def build_correction_dataframe(
     out = df_corr.rename(columns=rename_map)                           # After this out["Transaction Id"] contains the values originally 
                                                                        #    in df_corr["transaction_id"].
 
+    
+    # 7) Add column to join tax codes (code 1 + code 2)
+    out["New Tax Code 1+2"] = (out["New Tax Code 1"] + out["New Tax Code 2"]).astype(str).str.strip().fillna("")
+
     # 7) Keep only the columns we want, in the desired order
     out = out[out_cols]
 
@@ -160,7 +246,8 @@ def build_correction_dataframe(
     ]
     if sort_cols:
         out = out.sort_values(sort_cols)                               # Sorts the rows by sort_columns in ascending order.
-    
+
+
     return out.reset_index(drop=True)                                  # Reset index again so rowlablels are 0,1,2... in the final DataFrame you return.
 
 

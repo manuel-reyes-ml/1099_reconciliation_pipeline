@@ -1,27 +1,105 @@
 # Docstring for src/match_transactions module
 """
+match_transactions.py
 
-Matching and reconciliation between cleaned Relius and Matrix data.
+Reconciliation and matching engine for Relius vs Matrix distribution transactions.
 
-This module expects:
-- Relius data cleaned by src.clean_relius.clean_relius
-- Matrix data cleaned by src.clean_matrix.clean_matrix
+This module performs transaction-level reconciliation between two independent
+operational systems:
 
-Main responsabilities:
-- Optionally filter by plan_id(user_specified)
-- Match Relius <-> Matrix on (plan_id, ssn, gross_amt)
-- Apply date lag rule: 0 <= txn_date - exported_date <= max_date_lag_days
-- Classify match status:
-    - perfect_match
-    - match_needs_correction (business rules)
-    - date_out_of_range
-    - unmatched_relius
-    - unmatched_matrix
-- Apply inherited-plan tax code rules:
-    - cash-like distributions -> tax_code_1 should be 4
-    - rollover distributions -> tax_code_1 'G', tax_code_2 '4'
+- Relius: source-of-record transaction export (distribution activity and metadata)
+- Matrix: disbursement/1099 processing system export (payments, tax codes, etc.)
 
+The matching goal is to identify:
+- Reliable matches between Relius and Matrix transactions
+- Timing outliers (date outside tolerance window)
+- Unmatched records (present in one system only)
+- Matched records that require tax-code correction based on business rules
+
+Design goals
+------------
+- Deterministic matching: use stable match keys (plan_id, ssn, gross_amt) with
+  date tolerance logic to prevent false positives.
+- Business-rule driven classification: once a row matches, apply configurable
+  rules to detect conditions requiring correction (e.g., inherited plan tax code
+  overrides for cash vs rollover distributions).
+- Traceability: retain unique identifiers from both systems (Matrix Transaction Id,
+  Relius TRANSID_1) and relevant fields for audit/review.
+- Engine output compatibility: produce a DataFrame that can be fed directly into
+  `build_correction_file.build_correction_dataframe()` by including:
+    - match_status
+    - suggested_tax_code_1 / suggested_tax_code_2 (when correction needed)
+    - action and correction_reason (recommended)
+
+Inputs
+------
+This engine expects cleaned inputs produced by the respective cleaning modules:
+
+- Matrix input: output of `clean_matrix.clean_matrix()`
+  Typical canonical columns used:
+    - plan_id, ssn, gross_amt, txn_date, transaction_id, tax_code_1, tax_code_2
+    - participant_name, participant_state, matrix_account (optional but useful)
+
+- Relius input: output of `clean_relius.clean_relius()`
+  Typical canonical columns used:
+    - plan_id, ssn, gross_amt, exported_date, trans_id_relius
+    - dist_name, dist_category_relius, dist_code_1 (optional but useful)
+
+Core matching logic
+-------------------
+1) Key-based join
+   - Merge on `config.MATCH_KEYS` (typically: plan_id + ssn + gross_amt).
+   - Use a left merge from Relius to Matrix (or configurable direction), with
+     optional tracking of merge state via `_merge`.
+
+2) Date tolerance window
+   - In this workflow, Relius export date is expected to precede Matrix
+     transaction date.
+   - Apply asymmetric tolerance:
+       txn_date must be between exported_date and exported_date + MAX_DELAY_DAYS
+     where MAX_DELAY_DAYS is configured (e.g., 10).
+
+3) Classification
+   - perfect_match: merged and within date tolerance and tax codes already correct
+   - match_needs_correction: merged and within date tolerance but tax code(s)
+     do not meet business rules
+   - date_out_range: merged but txn_date outside tolerance window
+   - unmatched_relius: Relius row has no corresponding Matrix row
+   - unmatched_matrix: (optional depending on merge strategy) Matrix row with no
+     corresponding Relius row
+
+4) Business rules (inherited-plan engine)
+   - Rules are configured via `config.py` and often depend on:
+       - plan_id membership in inherited plan list
+       - Relius distribution category derived from DISTRNAM
+       - current Matrix tax code(s)
+   - The engine populates `suggested_tax_code_1` / `suggested_tax_code_2`
+     when a correction is recommended.
+
+Expected output schema (high level)
+-----------------------------------
+The returned DataFrame typically includes:
+- All match keys: plan_id, ssn, gross_amt
+- Dates: exported_date (Relius), txn_date (Matrix)
+- IDs: transaction_id (Matrix), trans_id_relius (Relius)
+- Current codes: tax_code_1, tax_code_2 (Matrix)
+- Suggested codes: suggested_tax_code_1, suggested_tax_code_2 (if applicable)
+- Status fields: match_status, correction_reason, action
+- Optional review fields: participant_name, dist_category_relius, matrix_account
+
+Public API
+----------
+- reconcile_relius_matrix(relius_df: pd.DataFrame, matrix_df: pd.DataFrame, ...) -> pd.DataFrame
+    Primary engine entrypoint. Produces a row-level reconciliation dataset.
+
+Privacy / compliance note
+-------------------------
+Never commit real participant PII (SSNs, names) or proprietary exports to source
+control. The public repository should use synthetic/masked data only. Production
+runs should occur in secure environments with access controls and retention
+policies.
 """
+
 
 from __future__ import annotations # Makes type hints like '-> pd.DataFrame', 'Optional[Iterable[str]] be stored as 
                                    #    strings and evaluated later.
