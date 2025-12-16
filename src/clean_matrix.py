@@ -404,6 +404,8 @@ def clean_matrix(
         df["roth_initial_contribution_year"] = (
             pd.to_numeric(df["roth_initial_contribution_year"], errors="coerce").astype("Int64")
         )
+        # Int64 is pandas’ nullable integer dtype. It holds real integers and a proper missing value (<NA>) in the same column.
+        #  You can still do numeric operations/filters cleanly while preserving missingness.
 
     # State
     if "state" in df.columns:
