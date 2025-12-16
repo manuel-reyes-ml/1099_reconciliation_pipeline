@@ -29,7 +29,8 @@ Contents
    - Template file paths for correction outputs
 
 2) Column mappings
-   - MATRIX_COLUMN_MAP: raw Matrix header -> canonical column name
+   - MATRIX_COLUMN_MAP: raw Matrix header -> canonical column name (includes
+     taxable amount and Roth initial contribution year)
    - RELIUS_COLUMN_MAP: raw Relius header -> canonical column name
    These mappings allow exports with inconsistent headers to be normalized.
 
@@ -198,6 +199,8 @@ MATRIX_COLUMN_MAP = {
     "Tax Form":            "tax_form",
     "Distribution Type":   "dist_type",
     "Transaction Id":      "transaction_id",
+    "Fed Taxable Amount":  "fed_taxable_amt",
+    "Roth Initial Contribution Year": "roth_initial_contribution_year",
     # add more if needed (e.g. Created Date, Approved Date...)
 }
 
@@ -228,12 +231,14 @@ MATRIX_CORE_COLUMNS = [
     "participant_name",
     "state",
     "gross_amt",
+    "fed_taxable_amt",
     "txn_date",
     "txn_method",
     "tax_code_1",
     "tax_code_2",
     "tax_form",
     "dist_type",
+    "roth_initial_contribution_year",
     "transaction_id",
     "matrix_account",
 ]
