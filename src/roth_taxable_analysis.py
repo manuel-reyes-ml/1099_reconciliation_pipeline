@@ -97,7 +97,20 @@ def run_roth_taxable_analysis(
 
     df["first_roth_tax_year"] = _to_numeric(df["first_roth_tax_year"])
     df["roth_initial_contribution_year"] = _to_numeric(df["roth_initial_contribution_year"])
-    df["start_roth_year"] = _compute_start_year(df)
+
+    first_year_valid = (
+        df["first_roth_tax_year"].notna()
+        & df["first_roth_tax_year"].gt(0)
+        & df["first_roth_tax_year"].between(1900, 2100)
+    )
+
+    start_year = df["first_roth_tax_year"].where(first_year_valid, df["roth_initial_contribution_year"])
+    start_year_valid = (
+        start_year.notna()
+        & start_year.gt(0)
+        & start_year.between(1900, 2100)
+    )
+    df["start_roth_year"] = start_year
 
     mask_2025 = df["txn_year"] == 2025
     gross_2025 = (
@@ -125,7 +138,8 @@ def run_roth_taxable_analysis(
     qualified_mask = (
         df["suggested_taxable_amt"].isna()
         & df["age_at_txn"].ge(59.5)
-        & (df["txn_year"] - df["start_roth_year"]).ge(5)
+        & start_year_valid
+        & (df["txn_year"] - start_year).ge(5)
     )
     df.loc[qualified_mask, "suggested_taxable_amt"] = 0.0
     df.loc[qualified_mask, "correction_reason"] = "qualified_roth_distribution"
@@ -135,7 +149,7 @@ def run_roth_taxable_analysis(
     taxable_change_required = taxable_suggested & df["fed_taxable_amt"].notna() & (
         (df["fed_taxable_amt"] - df["suggested_taxable_amt"]).abs() > 0.01
     )
-    roth_year_change_required = df["first_roth_tax_year"].notna() & (
+    roth_year_change_required = first_year_valid & (
         df["roth_initial_contribution_year"].isna()
         | df["roth_initial_contribution_year"].ne(df["first_roth_tax_year"])
     )
@@ -159,6 +173,13 @@ def run_roth_taxable_analysis(
         "match_needs_review",
         "INVESTIGATE",
         "missing_fed_taxable_amt",
+    ]
+
+    missing_first_year_mask = ~first_year_valid & df["match_status"].eq("match_no_action")
+    df.loc[missing_first_year_mask, ["match_status", "action", "correction_reason"]] = [
+        "match_needs_review",
+        "INVESTIGATE",
+        "missing_first_roth_tax_year",
     ]
 
     change_mask = taxable_change_required & df["match_status"].eq("match_no_action")
