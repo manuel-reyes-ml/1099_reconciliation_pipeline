@@ -59,6 +59,10 @@ def _is_roth_plan(series: pd.Series) -> pd.Series:
     return filled.str.startswith(ROTH_PLAN_PREFIX) | filled.str.endswith("R")
 
 
+def _compute_start_year(df: pd.DataFrame) -> pd.Series:
+    return df["first_roth_tax_year"].combine_first(df["roth_initial_contribution_year"])
+
+
 def run_roth_taxable_analysis(
         matrix_df: pd.DataFrame,
         relius_demo_df: pd.DataFrame,
@@ -93,6 +97,7 @@ def run_roth_taxable_analysis(
 
     df["first_roth_tax_year"] = _to_numeric(df["first_roth_tax_year"])
     df["roth_initial_contribution_year"] = _to_numeric(df["roth_initial_contribution_year"])
+    df["start_roth_year"] = _compute_start_year(df)
 
     mask_2025 = df["txn_year"] == 2025
     gross_2025 = (
@@ -115,38 +120,62 @@ def run_roth_taxable_analysis(
         & (df["roth_basis_amt"] >= df["gross_2025_total"])
     )
     df.loc[basis_mask, "suggested_taxable_amt"] = 0.0
-    df.loc[basis_mask, "match_status"] = "match_needs_correction"
-    df.loc[basis_mask, "action"] = "UPDATE_1099"
     df.loc[basis_mask, "correction_reason"] = "roth_basis_covers_2025_total"
 
     qualified_mask = (
-        df["match_status"].isna()
+        df["suggested_taxable_amt"].isna()
         & df["age_at_txn"].ge(59.5)
-        & (df["txn_year"] - df["first_roth_tax_year"]).ge(5)
+        & (df["txn_year"] - df["start_roth_year"]).ge(5)
     )
     df.loc[qualified_mask, "suggested_taxable_amt"] = 0.0
-    df.loc[qualified_mask, "match_status"] = "match_needs_correction"
-    df.loc[qualified_mask, "action"] = "UPDATE_1099"
     df.loc[qualified_mask, "correction_reason"] = "qualified_roth_distribution"
 
-    proximity_mask = (
-        df["match_status"].isna()
-        & df["fed_taxable_amt"].gt(0)
-        & df["gross_amt"].le(df["fed_taxable_amt"] * 1.15)
+    taxable_suggested = df["suggested_taxable_amt"].notna()
+    taxable_missing_current = taxable_suggested & df["fed_taxable_amt"].isna()
+    taxable_change_required = taxable_suggested & df["fed_taxable_amt"].notna() & (
+        (df["fed_taxable_amt"] - df["suggested_taxable_amt"]).abs() > 0.01
     )
-    df.loc[proximity_mask, "match_status"] = "match_needs_review"
-    df.loc[proximity_mask, "action"] = "INVESTIGATE"
-    df.loc[proximity_mask, "correction_reason"] = "taxable_within_15pct_of_gross"
-
-    df["match_status"] = df["match_status"].fillna("match_no_action")
-
-    year_diff_mask = df["first_roth_tax_year"].notna() & (
+    roth_year_change_required = df["first_roth_tax_year"].notna() & (
         df["roth_initial_contribution_year"].isna()
         | df["roth_initial_contribution_year"].ne(df["first_roth_tax_year"])
     )
+
     df["suggested_first_roth_tax_year"] = pd.NA
-    df.loc[year_diff_mask, "suggested_first_roth_tax_year"] = df.loc[
-        year_diff_mask, "first_roth_tax_year"
+    df.loc[roth_year_change_required, "suggested_first_roth_tax_year"] = df.loc[
+        roth_year_change_required, "first_roth_tax_year"
+    ]
+
+    df["match_status"] = "match_no_action"
+    df["action"] = pd.NA
+
+    df.loc[roth_year_change_required, ["match_status", "action", "correction_reason"]] = [
+        "match_needs_correction",
+        "UPDATE_1099",
+        "roth_initial_year_mismatch",
+    ]
+
+    missing_mask = taxable_missing_current & df["match_status"].eq("match_no_action")
+    df.loc[missing_mask, ["match_status", "action", "correction_reason"]] = [
+        "match_needs_review",
+        "INVESTIGATE",
+        "missing_fed_taxable_amt",
+    ]
+
+    change_mask = taxable_change_required & df["match_status"].eq("match_no_action")
+    df.loc[change_mask, ["match_status", "action"]] = [
+        "match_needs_correction",
+        "UPDATE_1099",
+    ]
+
+    proximity_mask = (
+        df["match_status"].eq("match_no_action")
+        & df["fed_taxable_amt"].gt(0)
+        & df["gross_amt"].le(df["fed_taxable_amt"] * 1.15)
+    )
+    df.loc[proximity_mask, ["match_status", "action", "correction_reason"]] = [
+        "match_needs_review",
+        "INVESTIGATE",
+        "taxable_within_15pct_of_gross",
     ]
 
     out_cols = [
