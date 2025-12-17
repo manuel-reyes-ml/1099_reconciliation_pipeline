@@ -2,30 +2,62 @@
 """
 roth_taxable_analysis.py
 
-Engine C: Analyze Roth distributions to flag taxable amounts that may need
-correction. Produces a canonical DataFrame compatible with
-`build_correction_dataframe()` (expects match_status, action, suggested_tax_code_*
-even if suggestions are NA for now).
+Engine C: Roth-taxable analysis for Matrix distributions. Flags Roth
+transactions that may need 1099-R taxable adjustments or Roth initial-year
+updates, producing a canonical DataFrame compatible with
+`build_correction_dataframe()` (match_status/action/suggested_tax_code_* present
+even if NA).
 
-Inputs (canonical):
-- matrix_df (cleaned Matrix): plan_id, ssn, txn_date, transaction_id,
-  participant_name, matrix_account, gross_amt, fed_taxable_amt,
-  roth_initial_contribution_year, tax_code_1, tax_code_2
-- relius_demo_df: plan_id, ssn, dob
-- relius_roth_basis_df: plan_id, ssn, first_roth_tax_year, roth_basis_amt
+Design goals
+------------
+- Reuse correction builder: emit the fields build_correction_dataframe expects.
+- Avoid false positives: only mark UPDATE when taxable differs beyond tolerance.
+- Transparency: accumulate all triggered reasons in `correction_reason` for
+  notebook review (`; ` joined).
 
-Scope:
-- Only Roth plans (plan_id startswith "300005" OR endswith "R")
-- Exclude inherited plans (INHERITED_PLAN_IDS); do NOT exclude rollovers
+Inputs
+------
+1) Matrix distributions (cleaned):
+   plan_id, ssn, txn_date, transaction_id, participant_name, matrix_account,
+   gross_amt, fed_taxable_amt, roth_initial_contribution_year,
+   tax_code_1, tax_code_2
+2) Relius demographics:
+   plan_id, ssn, dob
+3) Relius Roth basis:
+   plan_id, ssn, first_roth_tax_year, roth_basis_amt
 
-Rules (priority order):
-1) Basis coverage: if roth_basis_amt >= gross_2025_total (per plan_id+ssn for
-   txn_year==2025) -> suggested_taxable_amt = 0, match_status/action set.
-2) Qualified Roth: if age_at_txn >= 59.5 AND (txn_year - first_roth_tax_year) >= 5
-   -> suggested_taxable_amt = 0, match_status/action set if not already set.
-3) 15% proximity: if fed_taxable_amt > 0 and gross_amt <= fed_taxable_amt * 1.15
-   and no prior rule applied -> match_status/action set to review.
-Also suggests first_roth_tax_year when Matrix value is missing/different.
+Scope
+-----
+- Roth plans only (plan_id startswith "300005" OR endswith "R")
+- Exclude inherited plans (INHERITED_PLAN_IDS)
+- Do NOT exclude rollovers
+
+Core rules (priority)
+---------------------
+1) Basis coverage:
+   - If roth_basis_amt >= gross_2025_total (per plan_id+ssn, txn_year==2025)
+     suggest taxable = 0 (no UPDATE if Matrix already 0).
+2) Qualified Roth:
+   - age_at_txn >= 59.5 AND (txn_year - valid_start_year) >= 5
+     suggest taxable = 0 (no UPDATE if Matrix already 0).
+3) Roth initial year mismatch:
+   - If valid basis year differs from Matrix initial year -> suggest basis year
+     and flag correction.
+4) Invalid/missing basis year (0/NA):
+   - Flag for review (no suggested year).
+5) 15% proximity:
+   - If fed_taxable_amt > 0 and gross_amt <= fed_taxable_amt * 1.15 and no prior
+     correction/review -> flag for review.
+
+Correction vs review handling
+-----------------------------
+- Uses abs diff > 0.01 to decide if taxable needs UPDATE.
+- Missing fed_taxable_amt -> review (INVESTIGATE) rather than UPDATE.
+- Multiple reasons may apply; `correction_reason` joins all reason tokens.
+
+Public API
+----------
+- run_roth_taxable_analysis(matrix_df, relius_demo_df, relius_roth_basis_df) -> pd.DataFrame
 """
 
 from __future__ import annotations
