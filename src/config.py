@@ -183,6 +183,16 @@ RELIUS_COLUMN_MAP = {
 }
 
 
+RELIUS_ROTH_BASIS_COLUMN_MAP = {
+    # Raw column name     # Canonical name
+    "PLANID":             "plan_id",
+    "SSNUM":              "ssn",
+    "FIRSTNAM":           "first_name",
+    "LASTNAM":            "last_name",
+    "FIRSTTAXYEARROTH":   "first_roth_tax_year",
+    "Total":              "roth_basis_amt",
+}
+
 
 MATRIX_COLUMN_MAP = {
     # Raw column name       # Canonical name
@@ -223,6 +233,15 @@ RELIUS_CORE_COLUMNS = [
     "tax_year",
     "dist_code_1",
     "dist_name",
+]
+
+RELIUS_ROTH_BASIS_CORE_COLUMNS = [
+    "plan_id",
+    "ssn",
+    "first_name",
+    "last_name",
+    "first_roth_tax_year",
+    "roth_basis_amt",
 ]
 
 MATRIX_CORE_COLUMNS = [
