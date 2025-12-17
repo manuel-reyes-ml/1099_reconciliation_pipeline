@@ -63,6 +63,14 @@ def _compute_start_year(df: pd.DataFrame) -> pd.Series:
     return df["first_roth_tax_year"].combine_first(df["roth_initial_contribution_year"])
 
 
+def _append_reason(df: pd.DataFrame, mask: pd.Series, reason: str) -> None:
+    """Append a reason token to per-row reason lists for rows where mask is True."""
+    idx = mask[mask].index
+    for i in idx:
+        if reason not in df.at[i, "correction_reasons"]:
+            df.at[i, "correction_reasons"].append(reason)
+
+
 def run_roth_taxable_analysis(
         matrix_df: pd.DataFrame,
         relius_demo_df: pd.DataFrame,
@@ -71,7 +79,10 @@ def run_roth_taxable_analysis(
     """
     Run Engine C Roth taxable analysis and return a canonical DataFrame with
     correction flags/suggestions.
+    
+    Note: `correction_reason` joins all triggered reasons with '; ' for quick notebook review.
     """
+    
     df = matrix_df.copy()
     df["plan_id"] = _normalize_plan_id(df["plan_id"])
 
@@ -87,6 +98,7 @@ def run_roth_taxable_analysis(
 
     df["txn_date"] = _to_datetime(df["txn_date"])
     df["dob"] = _to_datetime(df["dob"])
+    df["correction_reasons"] = [[] for _ in range(len(df))]  # collect all triggered reasons per row
 
     df["txn_year"] = df["txn_date"].dt.year
     df["age_at_txn"] = _compute_age_years(df["dob"], df["txn_date"])
@@ -123,9 +135,10 @@ def run_roth_taxable_analysis(
     df["suggested_tax_code_1"] = pd.NA
     df["suggested_tax_code_2"] = pd.NA
     df["suggested_taxable_amt"] = pd.NA
-    df["correction_reason"] = pd.NA
     df["action"] = pd.NA
     df["match_status"] = pd.NA
+    df["correction_reason"] = pd.NA
+    raw_missing_first_year = ~first_year_valid
 
     basis_mask = (
         df["roth_basis_amt"].notna()
@@ -133,16 +146,14 @@ def run_roth_taxable_analysis(
         & (df["roth_basis_amt"] >= df["gross_2025_total"])
     )
     df.loc[basis_mask, "suggested_taxable_amt"] = 0.0
-    df.loc[basis_mask, "correction_reason"] = "roth_basis_covers_2025_total"
 
-    qualified_mask = (
-        df["suggested_taxable_amt"].isna()
-        & df["age_at_txn"].ge(59.5)
+    raw_qualified_mask = (
+        df["age_at_txn"].ge(59.5)
         & start_year_valid
         & (df["txn_year"] - start_year).ge(5)
     )
+    qualified_mask = df["suggested_taxable_amt"].isna() & raw_qualified_mask
     df.loc[qualified_mask, "suggested_taxable_amt"] = 0.0
-    df.loc[qualified_mask, "correction_reason"] = "qualified_roth_distribution"
 
     taxable_suggested = df["suggested_taxable_amt"].notna()
     taxable_missing_current = taxable_suggested & df["fed_taxable_amt"].isna()
@@ -162,24 +173,21 @@ def run_roth_taxable_analysis(
     df["match_status"] = "match_no_action"
     df["action"] = pd.NA
 
-    df.loc[roth_year_change_required, ["match_status", "action", "correction_reason"]] = [
+    df.loc[roth_year_change_required, ["match_status", "action"]] = [
         "match_needs_correction",
         "UPDATE_1099",
-        "roth_initial_year_mismatch",
     ]
 
     missing_mask = taxable_missing_current & df["match_status"].eq("match_no_action")
-    df.loc[missing_mask, ["match_status", "action", "correction_reason"]] = [
+    df.loc[missing_mask, ["match_status", "action"]] = [
         "match_needs_review",
         "INVESTIGATE",
-        "missing_fed_taxable_amt",
     ]
 
-    missing_first_year_mask = ~first_year_valid & df["match_status"].eq("match_no_action")
-    df.loc[missing_first_year_mask, ["match_status", "action", "correction_reason"]] = [
+    missing_first_year_mask = raw_missing_first_year & df["match_status"].eq("match_no_action")
+    df.loc[missing_first_year_mask, ["match_status", "action"]] = [
         "match_needs_review",
         "INVESTIGATE",
-        "missing_first_roth_tax_year",
     ]
 
     change_mask = taxable_change_required & df["match_status"].eq("match_no_action")
@@ -188,16 +196,36 @@ def run_roth_taxable_analysis(
         "UPDATE_1099",
     ]
 
-    proximity_mask = (
-        df["match_status"].eq("match_no_action")
-        & df["fed_taxable_amt"].gt(0)
-        & df["gross_amt"].le(df["fed_taxable_amt"] * 1.15)
-    )
-    df.loc[proximity_mask, ["match_status", "action", "correction_reason"]] = [
+    raw_proximity_mask = df["fed_taxable_amt"].gt(0) & df["gross_amt"].le(df["fed_taxable_amt"] * 1.15)
+    proximity_mask = df["match_status"].eq("match_no_action") & raw_proximity_mask
+    df.loc[proximity_mask, ["match_status", "action"]] = [
         "match_needs_review",
         "INVESTIGATE",
-        "taxable_within_15pct_of_gross",
     ]
+
+    # Collect all triggered reasons so notebooks can see combined context.
+    _append_reason(df, roth_year_change_required, "roth_initial_year_mismatch")
+    _append_reason(df, raw_missing_first_year, "missing_first_roth_tax_year")
+    _append_reason(df, basis_mask, "roth_basis_covers_2025_total")
+    _append_reason(df, raw_qualified_mask, "qualified_roth_distribution")
+    _append_reason(df, taxable_missing_current, "missing_fed_taxable_amt")
+    _append_reason(df, raw_proximity_mask, "taxable_within_15pct_of_gross")
+
+    df["correction_reason"] = df["correction_reasons"].apply(
+        lambda reasons: "; ".join(reasons) if reasons else pd.NA
+    )
+
+    # Collect all triggered reasons so notebooks can see combined context.
+    _append_reason(df, roth_year_change_required, "roth_initial_year_mismatch")
+    _append_reason(df, missing_first_year_mask, "missing_first_roth_tax_year")
+    _append_reason(df, basis_mask, "roth_basis_covers_2025_total")
+    _append_reason(df, qualified_mask, "qualified_roth_distribution")
+    _append_reason(df, missing_mask, "missing_fed_taxable_amt")
+    _append_reason(df, proximity_mask, "taxable_within_15pct_of_gross")
+
+    df["correction_reason"] = df["correction_reasons"].apply(
+        lambda reasons: "; ".join(reasons) if reasons else pd.NA
+    )
 
     out_cols = [
         "transaction_id",
