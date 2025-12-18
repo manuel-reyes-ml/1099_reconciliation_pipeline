@@ -14,6 +14,8 @@ Design goals
 - Avoid false positives: only mark UPDATE when taxable differs beyond tolerance.
 - Transparency: accumulate all triggered reasons in `correction_reason` for
   notebook review (`; ` joined).
+- Configurable: thresholds/labels pulled from `RothTaxableConfig`
+  (default `ROTH_TAXABLE_CONFIG`).
 
 Inputs
 ------
@@ -64,10 +66,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .config import INHERITED_PLAN_IDS
-
-
-ROTH_PLAN_PREFIX = "300005"
+from .config import INHERITED_PLAN_IDS, ROTH_TAXABLE_CONFIG, RothTaxableConfig
 
 
 def _normalize_plan_id(plan_id: pd.Series) -> pd.Series:
@@ -86,9 +85,15 @@ def _compute_age_years(dob: pd.Series, asof: pd.Series) -> pd.Series:
     return (asof - dob).dt.days / 365.25
 
 
-def _is_roth_plan(series: pd.Series) -> pd.Series:
+def _is_roth_plan(series: pd.Series, cfg: RothTaxableConfig) -> pd.Series:
     filled = series.fillna("")
-    return filled.str.startswith(ROTH_PLAN_PREFIX) | filled.str.endswith("R")
+    prefix_match = pd.Series(False, index=filled.index)
+    suffix_match = pd.Series(False, index=filled.index)
+    if cfg.roth_plan_prefixes:
+        prefix_match = filled.str.startswith(cfg.roth_plan_prefixes)
+    if cfg.roth_plan_suffixes:
+        suffix_match = filled.str.endswith(cfg.roth_plan_suffixes)
+    return prefix_match | suffix_match
 
 
 def _compute_start_year(df: pd.DataFrame) -> pd.Series:
@@ -107,6 +112,7 @@ def run_roth_taxable_analysis(
         matrix_df: pd.DataFrame,
         relius_demo_df: pd.DataFrame,
         relius_roth_basis_df: pd.DataFrame,
+        cfg: RothTaxableConfig = ROTH_TAXABLE_CONFIG,
 ) -> pd.DataFrame:
     """
     Run Engine C Roth taxable analysis and return a canonical DataFrame with
@@ -118,7 +124,7 @@ def run_roth_taxable_analysis(
     df = matrix_df.copy()
     df["plan_id"] = _normalize_plan_id(df["plan_id"])
 
-    mask_roth = _is_roth_plan(df["plan_id"])
+    mask_roth = _is_roth_plan(df["plan_id"], cfg)
     mask_not_inherited = ~df["plan_id"].isin(INHERITED_PLAN_IDS)
     df = df[mask_roth & mask_not_inherited].copy()
 
@@ -145,18 +151,18 @@ def run_roth_taxable_analysis(
     first_year_valid = (
         df["first_roth_tax_year"].notna()
         & df["first_roth_tax_year"].gt(0)
-        & df["first_roth_tax_year"].between(1900, 2100)
+        & df["first_roth_tax_year"].between(cfg.valid_year_min, cfg.valid_year_max)
     )
 
     start_year = df["first_roth_tax_year"].where(first_year_valid, df["roth_initial_contribution_year"])
     start_year_valid = (
         start_year.notna()
         & start_year.gt(0)
-        & start_year.between(1900, 2100)
+        & start_year.between(cfg.valid_year_min, cfg.valid_year_max)
     )
     df["start_roth_year"] = start_year
 
-    mask_2025 = df["txn_year"] == 2025
+    mask_2025 = df["txn_year"] == cfg.basis_coverage_year
     gross_2025 = (
         df.loc[mask_2025]
         .groupby(["plan_id", "ssn"])["gross_amt"]
@@ -180,9 +186,9 @@ def run_roth_taxable_analysis(
     df.loc[basis_mask, "suggested_taxable_amt"] = 0.0
 
     raw_qualified_mask = (
-        df["age_at_txn"].ge(59.5)
+        df["age_at_txn"].ge(cfg.qualified_age_years)
         & start_year_valid
-        & (df["txn_year"] - start_year).ge(5)
+        & (df["txn_year"] - start_year).ge(cfg.qualified_years_since_first)
     )
     qualified_mask = df["suggested_taxable_amt"].isna() & raw_qualified_mask
     df.loc[qualified_mask, "suggested_taxable_amt"] = 0.0
@@ -202,37 +208,39 @@ def run_roth_taxable_analysis(
         roth_year_change_required, "first_roth_tax_year"
     ]
 
-    df["match_status"] = "match_no_action"
+    df["match_status"] = cfg.status_no_action
     df["action"] = pd.NA
 
     df.loc[roth_year_change_required, ["match_status", "action"]] = [
-        "match_needs_correction",
-        "UPDATE_1099",
+        cfg.status_needs_correction,
+        cfg.action_update,
     ]
 
-    missing_mask = taxable_missing_current & df["match_status"].eq("match_no_action")
+    missing_mask = taxable_missing_current & df["match_status"].eq(cfg.status_no_action)
     df.loc[missing_mask, ["match_status", "action"]] = [
-        "match_needs_review",
-        "INVESTIGATE",
+        cfg.status_needs_review,
+        cfg.action_investigate,
     ]
 
-    missing_first_year_mask = raw_missing_first_year & df["match_status"].eq("match_no_action")
+    missing_first_year_mask = raw_missing_first_year & df["match_status"].eq(cfg.status_no_action)
     df.loc[missing_first_year_mask, ["match_status", "action"]] = [
-        "match_needs_review",
-        "INVESTIGATE",
+        cfg.status_needs_review,
+        cfg.action_investigate,
     ]
 
-    change_mask = taxable_change_required & df["match_status"].eq("match_no_action")
+    change_mask = taxable_change_required & df["match_status"].eq(cfg.status_no_action)
     df.loc[change_mask, ["match_status", "action"]] = [
-        "match_needs_correction",
-        "UPDATE_1099",
+        cfg.status_needs_correction,
+        cfg.action_update,
     ]
 
-    raw_proximity_mask = df["fed_taxable_amt"].gt(0) & df["gross_amt"].le(df["fed_taxable_amt"] * 1.15)
-    proximity_mask = df["match_status"].eq("match_no_action") & raw_proximity_mask
+    raw_proximity_mask = df["fed_taxable_amt"].gt(0) & df["gross_amt"].le(
+        df["fed_taxable_amt"] * (1 + cfg.taxable_proximity_pct)
+    )
+    proximity_mask = df["match_status"].eq(cfg.status_no_action) & raw_proximity_mask
     df.loc[proximity_mask, ["match_status", "action"]] = [
-        "match_needs_review",
-        "INVESTIGATE",
+        cfg.status_needs_review,
+        cfg.action_investigate,
     ]
 
     # Collect all triggered reasons so notebooks can see combined context.
