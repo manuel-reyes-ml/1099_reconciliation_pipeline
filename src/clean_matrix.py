@@ -107,6 +107,8 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from numbers import Integral, Real
+
 import pandas as pd
 
 from .config import (
@@ -144,21 +146,32 @@ def _normalize_ssn(value) -> str | pd.NA:
 
     if pd.isna(value):
         return pd.NA
-    
-    text = str(value).strip()
-    if not text:
+
+    if isinstance(value, Integral) and not isinstance(value, bool):
+        return f"{int(value):09d}"
+
+    if isinstance(value, Real) and not isinstance(value, Integral):
+        if pd.isna(value):
+            return pd.NA
+        if value.is_integer():
+            return f"{int(value):09d}"
         return pd.NA
 
-    digits = re.sub(r"\D", "", text) # keep only 0-9
+    value_str = str(value).strip()
+    if re.match(r"^\d+\.0$", value_str):
+        value_str = value_str[:-2]
+
+    digits = re.sub(r"\D", "", value_str)
     if not digits:
         return pd.NA
-    
-    # If we got more than 9 digits (e.g. '1945620320' from '194562032.0'),
-    # just take the first 9. This is safe because SSNs are exactly 9 digits.
-    if len(digits) > 9:
-        digits = digits[:9]
 
-    return digits.zfill(9)
+    if len(digits) < 9:
+        digits = digits.zfill(9)
+
+    if len(digits) != 9:
+        return pd.NA
+
+    return digits
 
 
 

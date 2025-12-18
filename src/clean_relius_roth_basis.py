@@ -57,7 +57,9 @@ production version only in secure environments with proper access controls.
 from __future__ import annotations
 
 import re
+from numbers import Integral, Real
 from typing import Iterable
+import warnings
 
 import pandas as pd
 
@@ -85,16 +87,36 @@ ROTH_BASIS_COLUMNS = [
 
 def _normalize_ssn(value) -> str | pd.NA:
 
-    """Normalize SSN to a 9-digit string; return <NA> when no digits remain."""
+    """Normalize SSN to a 9-digit string; return <NA> for invalid/unsafe inputs."""
 
     if pd.isna(value):
         return pd.NA
 
-    digits = re.sub(r"\D", "", str(value))
+    if isinstance(value, Integral) and not isinstance(value, bool):
+        return f"{int(value):09d}"
+
+    if isinstance(value, Real) and not isinstance(value, Integral):
+        if pd.isna(value):
+            return pd.NA
+        if value.is_integer():
+            return f"{int(value):09d}"
+        return pd.NA
+
+    value_str = str(value).strip()
+    if re.match(r"^\d+\.0$", value_str):
+        value_str = value_str[:-2]
+
+    digits = re.sub(r"\D", "", value_str)
     if not digits:
         return pd.NA
 
-    return digits.zfill(9)
+    if len(digits) < 9:
+        digits = digits.zfill(9)
+
+    if len(digits) != 9:
+        return pd.NA
+
+    return digits
 
 
 def _to_float(series: pd.Series) -> pd.Series:
@@ -136,7 +158,17 @@ def clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     # 3) Normalize fields
     if "ssn" in df.columns:
-        df["ssn"] = df["ssn"].apply(_normalize_ssn)
+        # Notebook smoke check:
+        # df["ssn"].str.len().value_counts(dropna=False)
+        # ["040511830", 40511830.0, "40511830.0"] -> "040511830"
+        df["ssn"] = df["ssn"].map(_normalize_ssn).astype("string")
+        invalid_mask = df["ssn"].isna() | (df["ssn"].str.len() != 9)
+        invalid_count = int(invalid_mask.sum())
+        if invalid_count > 0:
+            warnings.warn(
+                f"Roth basis SSN normalization produced {invalid_count} invalid values.",
+                stacklevel=2,
+            )
 
     for col in ["plan_id", "first_name", "last_name"]:
         if col in df.columns:
