@@ -6,6 +6,7 @@ Central configuration for the 1099 reconciliation and correction pipeline.
 
 This module defines canonical column mappings, core column selections, match keys,
 tolerance thresholds, and business-rule parameters used across the project.
+It also centralizes engine configs (age-based corrections, Roth taxable analysis).
 
 It is intentionally the single source of truth for:
 - Column standardization (raw export headers -> canonical names)
@@ -367,4 +368,29 @@ class AgeTaxCodeConfig:
                                     )
 
 
+@dataclass(frozen=True)
+class RothTaxableConfig:
+
+    """
+    
+    Configuration for Engine C (Roth taxable analysis) thresholds and labels.
+
+    """
+
+    qualified_age_years: float = 59.5
+    qualified_years_since_first: int = 5
+    basis_coverage_year: int = 2025
+    taxable_proximity_pct: float = 0.15
+    roth_plan_prefixes: tuple[str, ...] = ("300005",)
+    roth_plan_suffixes: tuple[str, ...] = ("R",)
+    valid_year_min: int = 1900
+    valid_year_max: int = 2100
+    status_no_action: str = "match_no_action"
+    status_needs_correction: str = "match_needs_correction"
+    status_needs_review: str = "match_needs_review"
+    action_update: str = "UPDATE_1099"
+    action_investigate: str = "INVESTIGATE"
+
+
 AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
+ROTH_TAXABLE_CONFIG = RothTaxableConfig()
