@@ -94,6 +94,9 @@ import pandas as pd
 
 from .config import AGE_TAXCODE_CONFIG, INHERITED_PLAN_IDS
 
+import re
+from numbers import Integral, Real
+
 
 
 RELIUS_DEMO_COLUMN_MAP = {
@@ -107,7 +110,7 @@ RELIUS_DEMO_COLUMN_MAP = {
 
 
 
-def _normalize_ssn(val: str) -> Optional[str]:
+def _normalize_ssn(value: str) -> str | pd.NA:
 
     """
     
@@ -118,20 +121,35 @@ def _normalize_ssn(val: str) -> Optional[str]:
     - return <NA> if nothing usable
     
     """
-    
-    if pd.isna(val):
+
+    if pd.isna(value):
         return pd.NA
-    
-    digits = "".join(ch for ch in str(val) if ch.isdigit())
+
+    if isinstance(value, Integral) and not isinstance(value, bool):
+        return f"{int(value):09d}"
+
+    if isinstance(value, Real) and not isinstance(value, Integral):
+        if pd.isna(value):
+            return pd.NA
+        if value.is_integer():
+            return f"{int(value):09d}"
+        return pd.NA
+
+    value_str = str(value).strip()
+    if re.match(r"^\d+\.0$", value_str):
+        value_str = value_str[:-2]
+
+    digits = re.sub(r"\D", "", value_str)
     if not digits:
         return pd.NA
-        
-    # If Excel stored as float, it may have an extra digit from ".0"
-    if len(digits) > 9:
-        digits = digits[:9]
-        
-    return digits.zfill(9)
 
+    if len(digits) < 9:
+        digits = digits.zfill(9)
+
+    if len(digits) != 9:
+        return pd.NA
+
+    return digits
 
 
 
