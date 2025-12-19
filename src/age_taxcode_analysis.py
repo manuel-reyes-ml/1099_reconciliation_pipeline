@@ -235,32 +235,14 @@ def _compute_age_years(dob_series: pd.Series, asof_series: pd.Series) -> pd.Seri
 
     """
     
-    Compute age in years (float) between DOB and  an 'as of' date for each row.
-
-    - Uses month-based difference to handle month/day boundaries
-      more accurately that naive year subtraction.
-    - Returns float with NaN where DOB or as-of is missing/invalid.
+    Compute age in years using only year components: txn_year - dob_year.
+    Returns Float64 with NaN where DOB or as-of is missing/invalid.
     
     """
 
-    dob = pd.to_datetime(dob_series, errors="coerce")
-    asof = pd.to_datetime(asof_series, errors="coerce")
-
-    age_years = pd.Series(pd.NA, index=dob.index, dtype="Float64")
-
-    valid = dob.notna() & asof.notna()
-    if not valid.any():
-        return age_years
-    
-    dob_v = dob[valid]
-    asof_v = asof[valid]
-
-    months = (asof_v.dt.year - dob_v.dt.year) * 12 + (asof_v.dt.month - dob_v.dt.month)
-    months -= (asof_v.dt.day < dob_v.dt.day).astype(int)
-
-    age_years.loc[valid] = months / 12
-
-    return age_years
+    dob_year = pd.to_datetime(dob_series, errors="coerce").dt.year
+    asof_year = pd.to_datetime(asof_series, errors="coerce").dt.year
+    return (asof_year - dob_year).astype("Float64")
 
 
 
