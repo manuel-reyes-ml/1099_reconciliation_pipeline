@@ -2,11 +2,11 @@
 """
 roth_taxable_analysis.py
 
-Engine C: Roth-taxable analysis for Matrix distributions. Flags Roth
-transactions that may need 1099-R taxable adjustments or Roth initial-year
-updates, producing a canonical DataFrame compatible with
-`build_correction_dataframe()` (match_status/action/suggested_tax_code_* present
-even if NA).
+Engine C: Roth-taxable and age-based tax-code analysis for Matrix distributions.
+Flags Roth transactions that may need 1099-R taxable adjustments, Roth
+initial-year updates, or age-based tax-code corrections, producing a canonical
+DataFrame compatible with `build_correction_dataframe()`
+(match_status/action/suggested_tax_code_* present even if NA).
 
 Design goals
 ------------
@@ -24,7 +24,7 @@ Inputs
    gross_amt, fed_taxable_amt, roth_initial_contribution_year,
    tax_code_1, tax_code_2
 2) Relius demographics:
-   plan_id, ssn, dob
+   plan_id, ssn, dob (optional: term_date for age-based Roth tax codes)
 3) Relius Roth basis:
    plan_id, ssn, first_roth_tax_year, roth_basis_amt
 
@@ -50,6 +50,11 @@ Core rules (priority)
 5) 15% proximity:
    - If fed_taxable_amt > 0 and gross_amt <= fed_taxable_amt * 1.15 and no prior
      correction/review -> flag for review.
+6) Roth age-based tax codes:
+   - Tax code 1 must be "B"; tax code 2 follows age-based rules:
+     * age_at_txn >= 59.5 -> "7"
+     * else if term_date exists -> "2" if age_at_termination >= 55 else "1"
+     * else -> "2" if age_at_txn >= 55 else "1"
 
 Correction vs review handling
 -----------------------------
@@ -66,7 +71,12 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .config import INHERITED_PLAN_IDS, ROTH_TAXABLE_CONFIG, RothTaxableConfig
+from .config import (
+    AGE_TAXCODE_CONFIG,
+    INHERITED_PLAN_IDS,
+    ROTH_TAXABLE_CONFIG,
+    RothTaxableConfig,
+)
 
 
 def _normalize_plan_id(plan_id: pd.Series) -> pd.Series:
@@ -128,7 +138,7 @@ def run_roth_taxable_analysis(
     mask_not_inherited = ~df["plan_id"].isin(INHERITED_PLAN_IDS)
     df = df[mask_roth & mask_not_inherited].copy()
 
-    demo_cols = ["plan_id", "ssn", "dob"]
+    demo_cols = [c for c in ["plan_id", "ssn", "dob", "term_date"] if c in relius_demo_df.columns]
     basis_cols = ["plan_id", "ssn", "first_roth_tax_year", "roth_basis_amt"]
 
     df = df.merge(relius_demo_df[demo_cols], on=["plan_id", "ssn"], how="left")
@@ -136,10 +146,14 @@ def run_roth_taxable_analysis(
 
     df["txn_date"] = _to_datetime(df["txn_date"])
     df["dob"] = _to_datetime(df["dob"])
+    if "term_date" not in df.columns:
+        df["term_date"] = pd.NaT
+    df["term_date"] = _to_datetime(df["term_date"])
     df["correction_reasons"] = [[] for _ in range(len(df))]  # collect all triggered reasons per row
 
     df["txn_year"] = df["txn_date"].dt.year
     df["age_at_txn"] = _compute_age_years(df["dob"], df["txn_date"])
+    df["age_at_termination"] = _compute_age_years(df["dob"], df["term_date"])
 
     df["gross_amt"] = _to_numeric(df["gross_amt"])
     df["fed_taxable_amt"] = _to_numeric(df.get("fed_taxable_amt"))
@@ -243,6 +257,47 @@ def run_roth_taxable_analysis(
         cfg.action_investigate,
     ]
 
+    # Roth age-based tax code expectations (Engine C now owns Roth tax codes)
+    age_cfg = AGE_TAXCODE_CONFIG
+    df["expected_tax_code_1"] = "B"
+    df["expected_tax_code_2"] = pd.NA
+
+    has_term = df["term_date"].notna()
+    mask_age_normal = df["age_at_txn"].ge(age_cfg.normal_age_years)
+    mask_under_normal = df["age_at_txn"].notna() & ~mask_age_normal
+
+    mask_under_with_term = mask_under_normal & has_term
+    mask_term_55_plus = mask_under_with_term & df["age_at_termination"].ge(age_cfg.term_rule_age_years)
+    mask_term_under_55 = mask_under_with_term & df["age_at_termination"].lt(age_cfg.term_rule_age_years)
+
+    mask_under_no_term = mask_under_normal & ~has_term
+    mask_dist_under_55 = mask_under_no_term & df["age_at_txn"].lt(age_cfg.term_rule_age_years)
+    mask_dist_55_plus = mask_under_no_term & df["age_at_txn"].ge(age_cfg.term_rule_age_years)
+
+    df.loc[mask_age_normal, "expected_tax_code_2"] = "7"
+    df.loc[mask_term_55_plus, "expected_tax_code_2"] = "2"
+    df.loc[mask_term_under_55, "expected_tax_code_2"] = "1"
+    df.loc[mask_dist_under_55, "expected_tax_code_2"] = "1"
+    df.loc[mask_dist_55_plus, "expected_tax_code_2"] = "2"
+
+    current_code1 = df["tax_code_1"].astype("string").str.upper().fillna("")
+    current_code2 = df["tax_code_2"].astype("string").str.upper().fillna("")
+    expected_code2 = df["expected_tax_code_2"].fillna("")
+
+    age_code_mismatch = (current_code1 != "B") | (
+        df["expected_tax_code_2"].notna() & (current_code2 != expected_code2)
+    )
+
+    df.loc[age_code_mismatch, "suggested_tax_code_1"] = "B"
+    df.loc[age_code_mismatch & df["expected_tax_code_2"].notna(), "suggested_tax_code_2"] = df["expected_tax_code_2"]
+
+    # Only promote to correction when no prior review/correction status
+    needs_age_update = age_code_mismatch & df["match_status"].eq(cfg.status_no_action)
+    df.loc[needs_age_update, ["match_status", "action"]] = [
+        cfg.status_needs_correction,
+        cfg.action_update,
+    ]
+
     # Collect all triggered reasons so notebooks can see combined context.
     _append_reason(df, roth_year_change_required, "roth_initial_year_mismatch")
     _append_reason(df, raw_missing_first_year, "missing_first_roth_tax_year")
@@ -250,18 +305,7 @@ def run_roth_taxable_analysis(
     _append_reason(df, raw_qualified_mask, "qualified_roth_distribution")
     _append_reason(df, taxable_missing_current, "missing_fed_taxable_amt")
     _append_reason(df, raw_proximity_mask, "taxable_within_15pct_of_gross")
-
-    df["correction_reason"] = df["correction_reasons"].apply(
-        lambda reasons: "; ".join(reasons) if reasons else pd.NA
-    )
-
-    # Collect all triggered reasons so notebooks can see combined context.
-    _append_reason(df, roth_year_change_required, "roth_initial_year_mismatch")
-    _append_reason(df, missing_first_year_mask, "missing_first_roth_tax_year")
-    _append_reason(df, basis_mask, "roth_basis_covers_2025_total")
-    _append_reason(df, qualified_mask, "qualified_roth_distribution")
-    _append_reason(df, missing_mask, "missing_fed_taxable_amt")
-    _append_reason(df, proximity_mask, "taxable_within_15pct_of_gross")
+    _append_reason(df, age_code_mismatch, "roth_age_tax_code_mismatch")
 
     df["correction_reason"] = df["correction_reasons"].apply(
         lambda reasons: "; ".join(reasons) if reasons else pd.NA
