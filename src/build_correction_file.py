@@ -174,7 +174,12 @@ def build_correction_dataframe(
     # 3) Filter by allowed actions if 'action' column exists
     if "action" in df.columns and allowed_actions is not None:
         allowed_actions = set(allowed_actions)                         # Converts to Set for faster membership checks.
-        mask_action = df["action"].isin(allowed_actions)               # Creates a Series of boolean -> is df["action"] values in 'allowed_actions'?
+        def _has_allowed(action_val):
+            if pd.isna(action_val):
+                return False
+            parts = str(action_val).splitlines()
+            return any(part in allowed_actions for part in parts)
+        mask_action = df["action"].apply(_has_allowed)               # multi-action aware
     else:
         mask_action = pd.Series(True, index=df.index)                  # Creates a Series of True, for the lenght(rows) of df.
 
