@@ -364,7 +364,7 @@ class AgeTaxCodeConfig:
     # (rollovers from traditional and Roth plans, etc.)
     excluded_codes: tuple[str, ...] = ("G", "H", "11", "13",
                                        "15", "16", "17", "18",
-                                       "19", "33"
+                                       "19", "33", "4",
                                     )
 
 
