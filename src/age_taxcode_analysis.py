@@ -94,8 +94,14 @@ import pandas as pd
 
 from .config import AGE_TAXCODE_CONFIG, INHERITED_PLAN_IDS
 
-import re
-from numbers import Integral, Real
+from .normalizers import (
+    normalize_ssn_series,
+    normalize_tax_code_series,
+    normalize_text_series,
+    to_date_series,
+)
+
+import warnings
 
 
 
@@ -107,51 +113,6 @@ RELIUS_DEMO_COLUMN_MAP = {
     "BIRTHDATE" : "dob",
     "TERM_DATE" : "term_date"
 }
-
-
-
-def _normalize_ssn(value: str) -> str | pd.NA:
-
-    """
-    
-    Normalize SSN to a 9-digit string:
-    - strip non-digits
-    - if > 9 digits, keep first 9(handles Excel '194562032.0')
-    - left pad with zeros to length 9
-    - return <NA> if nothing usable
-    
-    """
-
-    if pd.isna(value):
-        return pd.NA
-
-    if isinstance(value, Integral) and not isinstance(value, bool):
-        return f"{int(value):09d}"
-
-    if isinstance(value, Real) and not isinstance(value, Integral):
-        if pd.isna(value):
-            return pd.NA
-        if value.is_integer():
-            return f"{int(value):09d}"
-        return pd.NA
-
-    value_str = str(value).strip()
-    if re.match(r"^\d+\.0$", value_str):
-        value_str = value_str[:-2]
-
-    digits = re.sub(r"\D", "", value_str)
-    if not digits:
-        return pd.NA
-
-    if len(digits) < 9:
-        digits = digits.zfill(9)
-
-    if len(digits) != 9:
-        return pd.NA
-
-    return digits
-
-
 
 def clean_relius_demo(path: Path | str | bytes) -> pd.DataFrame:
 
@@ -188,11 +149,23 @@ def clean_relius_demo(path: Path | str | bytes) -> pd.DataFrame:
     df = df.rename(columns=RELIUS_DEMO_COLUMN_MAP)
 
     # Normalize SSN
-    df["ssn"] = df["ssn"].apply(_normalize_ssn)
+    df["ssn"] = normalize_ssn_series(df["ssn"])
+    invalid_mask = df["ssn"].isna() | (df["ssn"].str.len() != 9)
+    invalid_count = int(invalid_mask.sum())
+    if invalid_count > 0:
+        warnings.warn(
+            f"Relius demo SSN normalization produced {invalid_count} invalid values.",
+            stacklevel=2,
+        )
 
     # Normalize DOB and term_date to date objects
-    df["dob"] = pd.to_datetime(df["dob"], errors="coerce").dt.date
-    df["term_date"] = pd.to_datetime(df["term_date"], errors="coerce").dt.date
+    df["dob"] = to_date_series(df["dob"])
+    df["term_date"] = to_date_series(df["term_date"])
+
+    # Normalize plan/name text fields
+    df["plan_id"] = normalize_text_series(df["plan_id"], strip=True, upper=False)
+    df["first_name"] = normalize_text_series(df["first_name"], strip=True, upper=False)
+    df["last_name"] = normalize_text_series(df["last_name"], strip=True, upper=False)
 
     # Drop rows with no usable SSN
     df = df[df["ssn"].notna()].copy()
@@ -234,9 +207,9 @@ def attach_demo_to_matrix(
         suffixes=("", "_demo")
     )
 
-    # Defensive: make sure these are ates
-    merged["dob"] = pd.to_datetime(merged["dob"], errors="coerce").dt.date
-    merged["term_date"] = pd.to_datetime(merged["term_date"], errors="coerce").dt.date
+    # Defensive: make sure these are dates
+    merged["dob"] = to_date_series(merged["dob"])
+    merged["term_date"] = to_date_series(merged["term_date"])
 
     # Prefer Matrix participant_name; fall back to Relius first/last is missing
     if "participant_name" in merged.columns:
@@ -358,6 +331,19 @@ def run_age_taxcode_analysis(
 
     # 1) Attached demographics (DOB, termm_date, names) to Matrix data
     df = attach_demo_to_matrix(matrix_df, relius_demo_df)
+
+    # Normalize tax codes defensively to ensure 1–2 character codes
+    for col in ["tax_code_1", "tax_code_2"]:
+        if col in df.columns:
+            df[col] = normalize_tax_code_series(df[col])
+            lengths = df[col].str.len()
+            invalid_tax = df[col].notna() & lengths.gt(2)
+            invalid_tax_count = int(invalid_tax.sum())
+            if invalid_tax_count > 0:
+                warnings.warn(
+                    f"Age tax code normalization produced {invalid_tax_count} values longer than 2 characters.",
+                    stacklevel=2,
+                )
 
 
 
@@ -535,4 +521,3 @@ def run_age_taxcode_analysis(
     df["suggested_tax_code_2"] = df["expected_tax_code_2"]
 
     return df
-

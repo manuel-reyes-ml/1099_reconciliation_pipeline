@@ -106,8 +106,7 @@ from __future__ import annotations
 
 import re
 from typing import Iterable
-
-from numbers import Integral, Real
+import warnings
 
 import pandas as pd
 
@@ -117,94 +116,22 @@ from .config import (
     MATRIX_MATCH_KEYS,
 )
 
+from .normalizers import (
+    normalize_plan_id_series,
+    normalize_ssn_series,
+    normalize_state_series,
+    normalize_tax_code_series,
+    normalize_text_series,
+    to_date_series,
+    to_int64_nullable_series,
+    to_numeric_series,
+)
+
 
 
 # Refer to notes in src/clean_relius.py for better understanding in helpfer funtions...
 
 # --- Helper functions ------------------------------------------------------------
-
-# _normalize_ssn() works different than the one in clean_relius module
-#   matrix excel file read the SSN values as float (instead of str)
-def _normalize_ssn(value) -> str | pd.NA:
-
-    """
-
-    Normalize SSN to a 9-digit string for Matrix.
-
-    Handles cases where Excel reads SSNs as floats, e.g.:
-        194362032.0 -> '194562032'
-        1.94362032e8 -> '194562032
-    
-    Logic:
-    - Convert to string, strip
-    - Remove all non-digits
-    - If we end up with more than 9 digits, keep only the first 9
-      (SSNs are 9 digtits by definitation)
-    - Pad with leading zeros if fewer than 9
-
-    """
-
-    if pd.isna(value):
-        return pd.NA
-
-    if isinstance(value, Integral) and not isinstance(value, bool):
-        return f"{int(value):09d}"
-
-    if isinstance(value, Real) and not isinstance(value, Integral):
-        if pd.isna(value):
-            return pd.NA
-        if value.is_integer():
-            return f"{int(value):09d}"
-        return pd.NA
-
-    value_str = str(value).strip()
-    if re.match(r"^\d+\.0$", value_str):
-        value_str = value_str[:-2]
-
-    digits = re.sub(r"\D", "", value_str)
-    if not digits:
-        return pd.NA
-
-    if len(digits) < 9:
-        digits = digits.zfill(9)
-
-    if len(digits) != 9:
-        return pd.NA
-
-    return digits
-
-
-
-def _parse_date(series: pd.Series) -> pd.Series:
-
-    """
-    
-    Convert various date formats to pandas datetime (date only).
-
-    Handles:
-    - Excel date serials
-    - 'YYYY-MM-DD'
-    -'MM/DD/YYYY'
-    - etc.
-
-    Any unparsable values become NaT / NaN
-    
-    """
-
-    return pd.to_datetime(series, errors="coerce").dt.date
-
-
-
-def _to_float(series: pd.Series) -> pd.Series:
-
-    """
-    
-    Convert amounts to float, handling strings and blanks gracefully.
-    
-    """
-
-    return pd.to_numeric(series, errors="coerce")
-
 
 
 def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFrame:
@@ -221,77 +148,6 @@ def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFram
     return df[cols].copy()
 
 
-
-# _normalize_tax_code() works different than on clean_relius module
-#   we have a combination of digits (tax code) and strings in the same cell
-def _normalize_tax_code(value) -> str | pd.NA:
-
-    """
-    
-    Normalize Matrix tax code values.
-
-    Matrix examples:
-        '7 - Normal Distributions'
-        'G - Rollover'
-        '7'
-        ' G   -   Something '
-        '11 - Participant Loan Secured By Benefits'
-
-    We want just the primary code character: '7', '11' or 'G'
-    
-    Logic:
-    - Convert to string, strip
-    - Remove leading 'CODE ' if it exists (defensive)
-    - Find the first alphanumeric [0-9A-Z] and return it (uppercase)
-    - If nothing found, return <NA>
-
-    """
-
-    if pd.isna(value):
-        return pd.NA
-    
-    text = str(value).strip()
-    if not text:
-        return pd.NA
-    
-
-    # Remove leading "code " if it ever appears
-    # re.sub(pattern, repl, string): find all matches of regex 'pattern' in 'string' and replace with 'repl'
-    #  flags=re.IGNORECASE make the match case insentitive
-    # r"..." tells Python don't treat backlashes as special scape characters; pass them straight to the regex engine,
-    #   so, \s inside the string is really the regex \s(whitespace character: space, tab, newline, etc.). 
-    # '^' means: match only if this is at the beggining of the string.
-    # '*' in \s* means match whitespace in 0 or more spaces
-    """text = re.sub(r"^code\s*", "", text, flags=re.IGNORECASE)"""
-
-    # Find first alphanumeric code character: re.search(pattern, string) - if found returns match object, if not returns None.
-    # [0-9A-Z]: find any single digit from 0 to 9 or any single uppercase letter from A to Z.
-    """m = re.search(r"[0-9A-Z]", text.upper())
-    if not m:
-        return pd.NA"""
-    
-
-    # -----------------------------------------------------------------------------
-    # A) Test new code to extract two alphanumeric digits from raw tax code field
-    #   - Curent code only take out 1 alphanumeric from the 'text'
-    #   - Some tax codes have two digits, '11'
-    # -----------------------------------------------------------------------------
-    
-    # Capture 1 or 2 alphanumeric chars at the start of the string
-    # '^\s*' -> skip any leading whitespace at the start of the string.
-    # (..)   -> capturing group
-    # [A-Za-z0-9]{1,2} -> capturing 1-2 alphanumeric characters (upper and lower case)
-    m = re.match(r"^\s*([A-Za-z0-9]{1,2})", text)
-    if not m:
-        return pd.NA
-
-    # .group(0) returns the 'full match' from the match object returned by re.search()
-    # .group(1) returns the first group in parenthesis ()
-    return m.group(1) # e.g. '7', 'G'
-
-
-
-# We have an extra digit in the values, due to Matrix reading them as floats
 def _normalize_transaction_id(value) -> str | pd.NA:
 
     """
@@ -398,41 +254,52 @@ def clean_matrix(
 
     # 3) Clean fields
 
+    if "plan_id" in df.columns:
+        df["plan_id"] = normalize_plan_id_series(df["plan_id"])
+
     # SSN
     if "ssn" in df.columns:
-        df["ssn"] = df["ssn"].apply(_normalize_ssn) # .apply() applies function to all values in Series df[...]
+        df["ssn"] = normalize_ssn_series(df["ssn"]) # .apply() applies function to all values in Series df[...]
+        invalid_mask = df["ssn"].isna() | (df["ssn"].str.len() != 9)
+        invalid_count = int(invalid_mask.sum())
+        if invalid_count > 0:
+            warnings.warn(
+                f"Matrix SSN normalization produced {invalid_count} invalid values.",
+                stacklevel=2,
+            )
     
     # Dates
     if "txn_date" in df.columns:
-        df["txn_date"] = _parse_date(df["txn_date"]) # function takes a Series df[...] directly
+        df["txn_date"] = to_date_series(df["txn_date"]) # function takes a Series df[...] directly
     
     # Amounts
     if "gross_amt" in df.columns:
-        df["gross_amt"] = _to_float(df["gross_amt"])
+        df["gross_amt"] = to_numeric_series(df["gross_amt"])
 
     if "fed_taxable_amt" in df.columns:
-        df["fed_taxable_amt"] = _to_float(df["fed_taxable_amt"])
+        df["fed_taxable_amt"] = to_numeric_series(df["fed_taxable_amt"])
 
     if "roth_initial_contribution_year" in df.columns:
-        df["roth_initial_contribution_year"] = (
-            pd.to_numeric(df["roth_initial_contribution_year"], errors="coerce").astype("Int64")
-        )
+        df["roth_initial_contribution_year"] = to_int64_nullable_series(df["roth_initial_contribution_year"])
         # Int64 is pandas’ nullable integer dtype. It holds real integers and a proper missing value (<NA>) in the same column.
         #  You can still do numeric operations/filters cleanly while preserving missingness.
 
     # State
     if "state" in df.columns:
-        df["state"] = (
-            df["state"]
-            .astype(str)
-            .str.strip()
-            .str.upper()
-        )
+        df["state"] = normalize_state_series(df["state"])
     
     # Tax codes: extract primary code character (e.g. '7', 'G')
     for col in ["tax_code_1", "tax_code_2"]:
         if col in df.columns:
-            df[col] = df[col].apply(_normalize_tax_code)
+            df[col] = normalize_tax_code_series(df[col])
+            lengths = df[col].str.len()
+            invalid_tax = df[col].notna() & lengths.gt(2)
+            invalid_tax_count = int(invalid_tax.sum())
+            if invalid_tax_count > 0:
+                warnings.warn(
+                    f"Matrix tax code normalization produced {invalid_tax_count} values longer than 2 characters.",
+                    stacklevel=2,
+                )
 
     # Transaction IDs: extract transaction id from float format (e.g. 44324566.0 -> '44324566')
     if "transaction_id" in df.columns:
@@ -440,27 +307,16 @@ def clean_matrix(
     
     # Transaction method (ACH / Wire / Check)
     if "txn_method" in df.columns:
-        df["txn_method"] = (
-            df["txn_method"]
-            .astype(str)
-            .str.strip()
-        )
+        df["txn_method"] = normalize_text_series(df["txn_method"], strip=True, upper=False)
     
     # Distribution type (Matrix perspective - keep raw but cleaned)
     if "dist_type" in df.columns:
-        df["dist_type"] = (
-            df["dist_type"]
-            .astype(str)
-            .str.strip()
-        )
+        df["dist_type"] = normalize_text_series(df["dist_type"], strip=True, upper=False)
     
     # Convenience: participant name normalized
     if "participant_name" in df.columns:
-        df["partipant_name"] = (
-            df["participant_name"]
-            .astype(str)
-            .str.strip()
-        )
+        df["partipant_name"] = normalize_text_series(df["participant_name"], strip=True, upper=False)
+    
     
     # 4) Filter out unwanted accounts and transaction types
 
