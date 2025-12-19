@@ -2,7 +2,8 @@
 """
 age_taxcode_analysis.py
 
-Age-based 1099-R tax-code correction engine for Matrix distribution exports.
+Age-based 1099-R tax-code correction engine for Matrix distribution exports
+(non-Roth only).
 
 This module implements a standalone analysis flow that recommends 1099-R tax code
 updates for 2025 Matrix distributions using participant demographic and
@@ -56,6 +57,8 @@ Roth plans (identified by plan_id starting with "300005" OR plan_id ending in "R
 
 Exclusions (not processed by this engine)
 ----------------------------------------
+- Roth plans (plan_id startswith "300005" OR endswith "R") are handled by
+  `roth_taxable_analysis` (Engine C).
 - Matrix rows where tax_code_1 indicates rollover codes ("G", "H"), because those
   codes are driven by distribution type rather than age.
 - Plans listed in INHERITED_PLAN_IDS, because inherited-plan logic is handled by
@@ -291,6 +294,7 @@ def run_age_taxcode_analysis(
     """
     
     Apply age-based 1099-R tax-code rules to Matrix distributions using DOB and termination data from Relius.
+    Roth plans are excluded; Roth tax-code logic lives in Engine C (roth_taxable_analysis).
 
     Business rules:
 
@@ -345,12 +349,13 @@ def run_age_taxcode_analysis(
                     stacklevel=2,
                 )
 
-
-
-    # 3) Flags: rollover, inherited, Roth
+    # 3) Flags: rollover, inherited, Roth (Roth handled by Engine C)
     mask_rollover_code = df["tax_code_1"].isin(cfg.excluded_codes)   # G, H
     mask_inherited_plan = df["plan_id"].isin(INHERITED_PLAN_IDS)
-    df["is_roth_plan"] = df["plan_id"].apply(_is_roth_plan_id)
+    is_roth_plan = df["plan_id"].apply(_is_roth_plan_id)
+
+    # Filter out Roth rows entirely
+    df = df[~is_roth_plan].copy()
 
     # Exclude rollover and inherited plans from this engine
     df["age_engine_excluded"] = mask_rollover_code | mask_inherited_plan
@@ -362,9 +367,6 @@ def run_age_taxcode_analysis(
     has_dob = df["age_at_distribution"].notna()
     has_term = df["age_at_termination"].notna()
     eligible_any = ~df["age_engine_excluded"] & has_dob
-
-    eligible_roth = eligible_any & df["is_roth_plan"]
-    eligible_non_roth = eligible_any & ~df["is_roth_plan"]
 
     # 5) Initialize expected codes and metadata
     df["expected_tax_code_1"] = pd.NA
@@ -383,14 +385,12 @@ def run_age_taxcode_analysis(
     # NON-ROTH AGE RULES (7 / 2 / 1 in tax_code_1)
     # ------------------------------------------------------------
     # Rule 1: age >= 59.5 at distribution → 7
-    mask_normal_non_roth = (
-        eligible_non_roth & (df["age_at_distribution"] >= cfg.normal_age_years)
-    )
+    mask_normal_non_roth = eligible_any & (df["age_at_distribution"] >= cfg.normal_age_years)
     df.loc[mask_normal_non_roth, "expected_tax_code_1"] = cfg.normal_dist_code
     df.loc[mask_normal_non_roth, "correction_reason"] = "age_59_5_or_over_normal_distribution"
 
     # Rule 2: age < 59.5
-    mask_under_595_non_roth = eligible_non_roth & ~mask_normal_non_roth
+    mask_under_595_non_roth = eligible_any & ~mask_normal_non_roth
 
     # 2.1 with term date
     mask_under_595_with_term_non = mask_under_595_non_roth & has_term
@@ -428,62 +428,8 @@ def run_age_taxcode_analysis(
 
 
     # ------------------------------------------------------------
-    # ROTH AGE RULES (B in tax_code_1, 1/2/7 in tax_code_2)
-    # ------------------------------------------------------------
-    # Rule 1: age >= 59.5 at distribution → B / 7
-    mask_normal_roth = (
-        eligible_roth & (df["age_at_distribution"] >= cfg.normal_age_years)
-    )
-    df.loc[mask_normal_roth, "expected_tax_code_1"] = "B"
-    df.loc[mask_normal_roth, "expected_tax_code_2"] = "7"
-    df.loc[mask_normal_roth, "correction_reason"] = "roth_age_59_5_or_over_qualified"
-
-    # Rule 2: age < 59.5
-    mask_under_595_roth = eligible_roth & ~mask_normal_roth
-
-    # 2.1 with term date
-    mask_under_595_with_term_roth = mask_under_595_roth & has_term
-
-    # Term age >= 55 → B / 2
-    mask_term_55_plus_roth = mask_under_595_with_term_roth & (
-        df["age_at_termination"] >= cfg.term_rule_age_years
-    )
-    df.loc[mask_term_55_plus_roth, "expected_tax_code_1"] = "B"
-    df.loc[mask_term_55_plus_roth, "expected_tax_code_2"] = "2"
-    df.loc[mask_term_55_plus_roth, "correction_reason"] = "roth_terminated_at_or_after_55"
-
-    # Term age < 55 → B / 1
-    mask_term_under_55_roth = mask_under_595_with_term_roth & (
-        df["age_at_termination"] < cfg.term_rule_age_years
-    )
-    df.loc[mask_term_under_55_roth, "expected_tax_code_1"] = "B"
-    df.loc[mask_term_under_55_roth, "expected_tax_code_2"] = "1"
-    df.loc[mask_term_under_55_roth, "correction_reason"] = "roth_terminated_before_55"
-
-    # 2.2 no term date → use age at distribution vs 55
-    mask_under_595_no_term_roth = mask_under_595_roth & ~has_term
-
-    # <55 → B / 1
-    mask_dist_under_55_roth = mask_under_595_no_term_roth & (
-        df["age_at_distribution"] < cfg.term_rule_age_years
-    )
-    df.loc[mask_dist_under_55_roth, "expected_tax_code_1"] = "B"
-    df.loc[mask_dist_under_55_roth, "expected_tax_code_2"] = "1"
-    df.loc[mask_dist_under_55_roth, "correction_reason"] = "roth_no_term_date_under_55_in_2025"
-
-    # >=55 → B / 2
-    mask_dist_55_plus_roth = mask_under_595_no_term_roth & (
-        df["age_at_distribution"] >= cfg.term_rule_age_years
-    )
-    df.loc[mask_dist_55_plus_roth, "expected_tax_code_1"] = "B"
-    df.loc[mask_dist_55_plus_roth, "expected_tax_code_2"] = "2"
-    df.loc[mask_dist_55_plus_roth, "correction_reason"] = "roth_no_term_date_55_plus_in_2025"
-
-
-    # ------------------------------------------------------------
     # 6) Compare expected vs current codes
     #    - Non-Roth: compare tax_code_1 only
-    #    - Roth: compare both tax_code_1 AND tax_code_2
     # ------------------------------------------------------------
     code1 = df["tax_code_1"].fillna("")
     code2 = df["tax_code_2"].fillna("")
@@ -493,20 +439,9 @@ def run_age_taxcode_analysis(
 
     has_expected = df["expected_tax_code_1"].notna()
 
-    matches_non_roth = (
-        has_expected
-        & ~df["is_roth_plan"]
-        & (code1 == exp1)
-    )
+    matches_non_roth = has_expected & (code1 == exp1)
 
-    matches_roth = (
-        has_expected
-        & df["is_roth_plan"]
-        & (code1 == exp1)
-        & (code2 == exp2)
-    )
-
-    df["code_matches_expected"] = matches_non_roth | matches_roth
+    df["code_matches_expected"] = matches_non_roth
 
     # perfect_match where codes match expectation
     df.loc[df["code_matches_expected"], "match_status"] = "perfect_match"
