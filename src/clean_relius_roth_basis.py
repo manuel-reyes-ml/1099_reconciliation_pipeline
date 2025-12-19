@@ -56,13 +56,16 @@ production version only in secure environments with proper access controls.
 
 from __future__ import annotations
 
-import re
-from numbers import Integral, Real
 from typing import Iterable
 import warnings
 
 import pandas as pd
-
+from .normalizers import (
+    normalize_ssn_series,
+    normalize_text_series,
+    to_int64_nullable_series,
+    to_numeric_series,
+)
 
 ROTH_BASIS_COLUMN_MAP = {
     "PLANID": "plan_id",
@@ -84,47 +87,6 @@ ROTH_BASIS_COLUMNS = [
 
 
 # --- Helper functions ------------------------------------------------------------
-
-def _normalize_ssn(value) -> str | pd.NA:
-
-    """Normalize SSN to a 9-digit string; return <NA> for invalid/unsafe inputs."""
-
-    if pd.isna(value):
-        return pd.NA
-
-    if isinstance(value, Integral) and not isinstance(value, bool):
-        return f"{int(value):09d}"
-
-    if isinstance(value, Real) and not isinstance(value, Integral):
-        if pd.isna(value):
-            return pd.NA
-        if value.is_integer():
-            return f"{int(value):09d}"
-        return pd.NA
-
-    value_str = str(value).strip()
-    if re.match(r"^\d+\.0$", value_str):
-        value_str = value_str[:-2]
-
-    digits = re.sub(r"\D", "", value_str)
-    if not digits:
-        return pd.NA
-
-    if len(digits) < 9:
-        digits = digits.zfill(9)
-
-    if len(digits) != 9:
-        return pd.NA
-
-    return digits
-
-
-def _to_float(series: pd.Series) -> pd.Series:
-
-    """Convert amounts to float with coercion for non-numeric noise."""
-
-    return pd.to_numeric(series, errors="coerce")
-
 
 def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFrame:
 
@@ -161,7 +123,7 @@ def clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame:
         # Notebook smoke check:
         # df["ssn"].str.len().value_counts(dropna=False)
         # ["040511830", 40511830.0, "40511830.0"] -> "040511830"
-        df["ssn"] = df["ssn"].map(_normalize_ssn).astype("string")
+        df["ssn"] = normalize_ssn_series(df["ssn"])
         invalid_mask = df["ssn"].isna() | (df["ssn"].str.len() != 9)
         invalid_count = int(invalid_mask.sum())
         if invalid_count > 0:
@@ -172,15 +134,13 @@ def clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     for col in ["plan_id", "first_name", "last_name"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = normalize_text_series(df[col], strip=True, upper=False)
 
     if "first_roth_tax_year" in df.columns:
-        df["first_roth_tax_year"] = (
-            pd.to_numeric(df["first_roth_tax_year"], errors="coerce").astype("Int64")
-        )
+        df["first_roth_tax_year"] = to_int64_nullable_series(df["first_roth_tax_year"])
 
     if "roth_basis_amt" in df.columns:
-        df["roth_basis_amt"] = _to_float(df["roth_basis_amt"])
+        df["roth_basis_amt"] = to_numeric_series(df["roth_basis_amt"])
 
     # 4) Deduplicate by identifiers, keeping the row with the most non-null signals
     if {"plan_id", "ssn"} <= set(df.columns):

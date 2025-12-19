@@ -101,9 +101,9 @@ access controls and retention policies.
 # it will resolve it later
 from __future__ import annotations
 
-import re # Python's regular expression module
 from typing import Iterable #A type hint to describe an arg(variable) should be an object that can iterate:
                             # list, tuple, set, dict, str
+import warnings
 import pandas as pd
 
 from .config import (
@@ -111,76 +111,17 @@ from .config import (
     RELIUS_CORE_COLUMNS,
     RELIUS_MATCH_KEYS,
 )
+from .normalizers import (
+    normalize_ssn_series,
+    normalize_text_series,
+    to_date_series,
+    to_int64_nullable_series,
+    to_numeric_series,
+)
 
 
 
 # --- Helper functions ------------------------------------------------------------
-
-# _* prefix is a convention: "This is an internal helper,no part of the public API."
-#
-# -> str | pd.NA = type hint meaning "returns a string or (panda's nullable missing value)"
-def _normalize_ssn(value) -> str | pd.NA: #Pylance says error in using pd.NA here but code runs fine
-
-    """
-  
-    Normalize SSN to a 9-digit string.
-
-    - Strips all non-digits.
-    - Pads with leading zeros if needed
-    - Returns <NA> if no digits are found
-    
-    """
-
-    # Check if the value is pandas-style missing (NaN, None, etc.)
-    if pd.isna(value):
-        return pd.NA
-    
-    # Regex \D means "non-digits character"
-    # re.sub(r"...") removes all non-digits
-    digits = re.sub(r"\D", "", str(value))
-    if not digits:
-        return pd.NA
-    
-    #.zfill(9) pads with leading zeros to length 9
-    # "123" -> "000000123"
-    return digits.zfill(9)
-
-
-# pd.Series expectes a single column from a DataFrame (a Series)
-def _parse_date(series: pd.Series) -> pd.Series:
-
-    """
-    
-    Convert various date formats to pandas datetime (date only).
-
-    Handles:
-    - Excel date serials
-    - 'YYYY-MM-DD'
-    - etc.
-
-    Any unparsable values become NaT (Not a Time) / NaN (Not a Number).
-
-    """
-
-    # pd.to_datetime tries to parse each value into a datetime
-        # error="coerce" -> invalid values becomes NaT instead of crashing
-    # .dt.date take only the date part(no time of day), reurning Python datetime.date objects.
-    return pd.to_datetime(series, errors="coerce").dt.date
-
-
-
-def _to_float(series: pd.Series) -> pd.Series:
-
-    """
-    
-    Convert amounts to float, handling strings and blanks gracefully.
-    
-    """
-
-    # Converts values to numbers(int/float)
-    # non-numeric values become NaN instead of crashing
-    return pd.to_numeric(series, errors="coerce")
-
 
 
 def _drop_unneeded_columns(df: pd.DataFrame, keep: Iterable[str]) -> pd.DataFrame:
@@ -289,34 +230,46 @@ def clean_relius(
 
     # 3) Clean fields
 
+    if "plan_id" in df.columns:
+        df["plan_id"] = normalize_text_series(df["plan_id"], strip=True, upper=False)
+
     # SSN
     if "ssn" in df.columns:
         # Apply _normalize_ssn  to each valye in the 'ssn' column
-        df["ssn"] = df["ssn"].apply(_normalize_ssn)
+        df["ssn"] = normalize_ssn_series(df["ssn"])
+        invalid_mask = df["ssn"].isna() | (df["ssn"].str.len() != 9)
+        invalid_count = int(invalid_mask.sum())
+        if invalid_count > 0:
+            warnings.warn(
+                f"Relius SSN normalization produced {invalid_count} invalid values.",
+                stacklevel=2,
+            )
     
     # Dates
     if "exported_date" in df.columns:
-        df["exported_date"] = _parse_date(df["exported_date"]) # Returns either Series of datetime.date or NaT
+        df["exported_date"] = to_date_series(df["exported_date"]) # Returns either Series of datetime.date or NaT
 
     # Tax year
     if "tax_year" in df.columns:
         # Convert to number, if invalid -> NaN
         # .astype("Int64") = pandas' nullable integer type (suppoer NA)
-        df["tax_year"] = pd.to_numeric(df["tax_year"], errors="coerce").astype("Int64")
+        df["tax_year"] = to_int64_nullable_series(df["tax_year"])
 
     # Amounts
     if "gross_amt" in df.columns:
-        df["gross_amt"] = _to_float(df["gross_amt"])
+        df["gross_amt"] = to_numeric_series(df["gross_amt"])
 
     # distribution code (Relius perspective)
     if "dist_code_1" in df.columns:
-        # Pandas string pipeline
-        df["dist_code_1"] = (
-            df["dist_code_1"]
-            .astype(str)      # convert all values to strings(even NaN becomes 'nan')
-            .str.strip()      # trim spaces around each string
-            .str.upper()     # uppercases the string(at the distribution codes are: '7', '1', 'G', etc.)
-        )
+        df["dist_code_1"] = normalize_text_series(df["dist_code_1"], strip=True, upper=True)
+        lengths = df["dist_code_1"].str.len()
+        invalid_tax = df["dist_code_1"].notna() & lengths.gt(2)
+        invalid_tax_count = int(invalid_tax.sum())
+        if invalid_tax_count > 0:
+            warnings.warn(
+                f"Relius dist_code_1 normalization produced {invalid_tax_count} values longer than 2 characters.",
+                stacklevel=2,
+            )
 
     # Distribution name -> category
     if "dist_name" in df.columns:
@@ -327,10 +280,10 @@ def clean_relius(
     # Full name (for matching Matrix and reporting)
     if "first_name" in df.columns and "last_name" in df.columns:
         df["full_name"] = (
-            df["first_name"].fillna("").astype(str).str.strip() # .astype(str) ensure string
+            normalize_text_series(df["first_name"], strip=True, upper=False).fillna("")
             + " "
-            + df["last_name"].fillna("").astype(str).str.strip()
-        ).str.strip() # removes leading/trailing spaces in case one side was empty
+            + normalize_text_series(df["last_name"], strip=True, upper=False).fillna("")
+        ).str.strip().replace("", pd.NA) # removes leading/trailing spaces in case one side was empty
     
     # 4) Optionally drop rows missing key fields for matching
     match_key_cols = [c for c in RELIUS_MATCH_KEYS if c in df.columns]
