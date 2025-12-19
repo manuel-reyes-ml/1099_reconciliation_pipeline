@@ -217,7 +217,6 @@ MATRIX_COLUMN_MAP = {
 
 
 
-
 # --- Core columns & match keys ----------------------------------------------------
 
 # These are the canonical columns we actually want to KEEP from the wide
@@ -392,5 +391,34 @@ class RothTaxableConfig:
     action_investigate: str = "INVESTIGATE"
 
 
+@dataclass(frozen=True)
+class RothTaxCodeConfig:
+    """
+    Configuration for Roth tax-code handling (Engine C).
+    """
+
+    excluded_codes_taxcode: tuple[str, ...] = (
+        "11",
+        "13",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "33",
+    )
+    status_excluded: str = "excluded_from_age_engine_rollover_or_inherited"
+    action_update: str = "UPDATE_1099"
+    action_investigate: str = "INVESTIGATE"
+    action_joiner: str = "\n"
+    reason_joiner: str = "\n"
+    reason_bullet: str = "- "
+    roth_code: str = "B"
+    roth_rollover_code: str = "H"
+    rollover_code: str = "G"
+    death_code: str = "4"
+
+
 AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
 ROTH_TAXABLE_CONFIG = RothTaxableConfig()
+ROTH_TAXCODE_CONFIG = RothTaxCodeConfig()
