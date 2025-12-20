@@ -75,8 +75,8 @@ Important notes
 ---------------
 - This module does not require matching by dollar amount; it joins Matrix to
   Relius demographics using (plan_id, ssn).
-- Age calculations are based on month-level differences to handle month/day
-  boundaries more accurately than naive year subtraction.
+- Age thresholds are evaluated by attainment as of 12/31 of the transaction
+  year (and term year when applicable).
 - All repository data should remain synthetic or masked when published. Never
   commit real SSNs, DOBs, or termination dates.
 
@@ -89,9 +89,6 @@ Public API
 
 from __future__ import annotations
 from pathlib import Path
-
-from dataclasses import dataclass
-from typing import Optional
 
 import pandas as pd
 
@@ -231,18 +228,27 @@ def attach_demo_to_matrix(
 
 
 
-def _compute_age_years(dob_series: pd.Series, asof_series: pd.Series) -> pd.Series:
-
+def attained_age_by_year_end(
+    dob_series: pd.Series,
+    year_series: pd.Series,
+    *,
+    years: int,
+    months: int = 0,
+) -> pd.Series:
     """
-    
-    Compute age in years using only year components: txn_year - dob_year.
-    Returns Float64 with NaN where DOB or as-of is missing/invalid.
-    
-    """
+    Determine if an attained age threshold is met by Dec 31 of the given year.
 
-    dob_year = pd.to_datetime(dob_series, errors="coerce").dt.year
-    asof_year = pd.to_datetime(asof_series, errors="coerce").dt.year
-    return (asof_year - dob_year).astype("Float64")
+    Example: for 59.5 threshold, we check whether dob + 59 years + 6 months is
+    on/before 12/31 of txn_year.
+    """
+    dob_dt = pd.to_datetime(dob_series, errors="coerce")
+    years_int = pd.to_numeric(year_series, errors="coerce").astype("Int64")
+    year_end = pd.to_datetime(years_int.astype("string") + "-12-31", errors="coerce")
+    threshold_date = dob_dt + pd.DateOffset(years=years, months=months)
+    result = pd.Series(False, index=dob_series.index)
+    valid = dob_dt.notna() & year_end.notna()
+    result.loc[valid] = threshold_date[valid] <= year_end[valid]
+    return result
 
 
 
@@ -275,20 +281,22 @@ def run_age_taxcode_analysis(
     
     """
     
-    Apply age-based 1099-R tax-code rules to Matrix distributions using DOB and termination data from Relius.
-    Roth plans are excluded; Roth tax-code logic lives in Engine C (roth_taxable_analysis).
+    Apply age-based 1099-R tax-code rules to Matrix distributions using DOB and
+    termination data from Relius. Roth plans are excluded; Roth tax-code logic
+    lives in Engine C (roth_taxable_analysis).
 
     Business rules:
 
-        1) If participant was >= 59.5 on the Matrix transaction date -> code 7.
+        1) If participant attains age 59.5 at any point in the transaction year
+           -> code 7.
 
-        2) If participant was < 59.5 on the transaction date:
+        2) If participant does NOT attain 59.5 in the transaction year:
             2.1) If we have a term date for that plan:
                 - age at termination >= 55 -> code 2
                 - age at termination < 55 -> code 1
             2.2) If we do NOT have a term date:
-                - if age at distribution (2025) < 55  -> code 1
-                - if age at distribution (2025) >= 55 -> code 2
+                - if will NOT reach 55 in txn year    -> code 1
+                - if will reach 55 in txn year        -> code 2
 
     Additional Roth rules:
 
@@ -342,13 +350,32 @@ def run_age_taxcode_analysis(
     # Exclude rollover and inherited plans from this engine
     df["age_engine_excluded"] = mask_rollover_code | mask_inherited_plan
 
-    # 4) Compute ages
-    df["age_at_distribution"] = _compute_age_years(df["dob"], df["txn_date"])
-    df["age_at_termination"] = _compute_age_years(df["dob"], df["term_date"])
+    # 4) Compute year fields and attained-age flags
+    dob_dt = pd.to_datetime(df["dob"], errors="coerce")
+    txn_dt = pd.to_datetime(df["txn_date"], errors="coerce")
+    term_dt = pd.to_datetime(df["term_date"], errors="coerce")
+    txn_year = txn_dt.dt.year
+    term_year = term_dt.dt.year
+    dob_year = dob_dt.dt.year
 
-    has_dob = df["age_at_distribution"].notna()
-    has_term = df["age_at_termination"].notna()
-    eligible_any = ~df["age_engine_excluded"] & has_dob
+    attained_59_5 = attained_age_by_year_end(df["dob"], txn_year, years=59, months=6)
+    attained_55_term = attained_age_by_year_end(df["dob"], term_year, years=55)
+    attained_55_txn = attained_age_by_year_end(df["dob"], txn_year, years=55)
+
+    # Diagnostics for notebooks (year-based ages)
+    df["dob_year"] = dob_year.astype("Int64")
+    df["txn_year"] = txn_year.astype("Int64")
+    df["term_year"] = term_year.astype("Int64")
+    df["age_at_distribution_year"] = (txn_year - dob_year).astype("Float64")
+    df["age_at_termination_year"] = (term_year - dob_year).astype("Float64")
+    df["attained_59_5_in_txn_year"] = attained_59_5
+    df["attained_55_in_txn_year"] = attained_55_txn
+    df["attained_55_in_term_year"] = attained_55_term
+
+    has_dob = dob_dt.notna()
+    has_txn_year = txn_year.notna()
+    has_term_year = term_year.notna()
+    eligible_any = ~df["age_engine_excluded"] & has_dob & has_txn_year
 
     # 5) Initialize expected codes and metadata
     df["expected_tax_code_1"] = pd.NA
@@ -367,7 +394,7 @@ def run_age_taxcode_analysis(
     # NON-ROTH AGE RULES (7 / 2 / 1 in tax_code_1)
     # ------------------------------------------------------------
     # Rule 1: age >= 59.5 at distribution → 7
-    mask_normal_non_roth = eligible_any & (df["age_at_distribution"] >= cfg.normal_age_years)
+    mask_normal_non_roth = eligible_any & attained_59_5
     df.loc[mask_normal_non_roth, "expected_tax_code_1"] = cfg.normal_dist_code
     df.loc[mask_normal_non_roth, "correction_reason"] = "age_59_5_or_over_normal_distribution"
 
@@ -375,38 +402,30 @@ def run_age_taxcode_analysis(
     mask_under_595_non_roth = eligible_any & ~mask_normal_non_roth
 
     # 2.1 with term date
-    mask_under_595_with_term_non = mask_under_595_non_roth & has_term
+    mask_under_595_with_term_non = mask_under_595_non_roth & has_term_year
 
     # Term age >= 55 → 2
-    mask_term_55_plus_non = mask_under_595_with_term_non & (
-        df["age_at_termination"] >= cfg.term_rule_age_years
-    )
+    mask_term_55_plus_non = mask_under_595_with_term_non & attained_55_term
     df.loc[mask_term_55_plus_non, "expected_tax_code_1"] = cfg.age_55_plus_code
     df.loc[mask_term_55_plus_non, "correction_reason"] = "terminated_at_or_after_55"
 
     # Term age < 55 → 1
-    mask_term_under_55_non = mask_under_595_with_term_non & (
-        df["age_at_termination"] < cfg.term_rule_age_years
-    )
+    mask_term_under_55_non = mask_under_595_with_term_non & ~attained_55_term
     df.loc[mask_term_under_55_non, "expected_tax_code_1"] = cfg.under_55_code
     df.loc[mask_term_under_55_non, "correction_reason"] = "terminated_before_55"
 
     # 2.2 no term date → use age at distribution vs 55
-    mask_under_595_no_term_non = mask_under_595_non_roth & ~has_term
+    mask_under_595_no_term_non = mask_under_595_non_roth & ~has_term_year
 
     # <55 → 1
-    mask_dist_under_55_non = mask_under_595_no_term_non & (
-        df["age_at_distribution"] < cfg.term_rule_age_years
-    )
+    mask_dist_under_55_non = mask_under_595_no_term_non & ~attained_55_txn
     df.loc[mask_dist_under_55_non, "expected_tax_code_1"] = cfg.under_55_code
-    df.loc[mask_dist_under_55_non, "correction_reason"] = "no_term_date_under_55_in_2025"
+    df.loc[mask_dist_under_55_non, "correction_reason"] = "no_term_date_under_55_in_txn_year"
 
     # >=55 → 2
-    mask_dist_55_plus_non = mask_under_595_no_term_non & (
-        df["age_at_distribution"] >= cfg.term_rule_age_years
-    )
+    mask_dist_55_plus_non = mask_under_595_no_term_non & attained_55_txn
     df.loc[mask_dist_55_plus_non, "expected_tax_code_1"] = cfg.age_55_plus_code
-    df.loc[mask_dist_55_plus_non, "correction_reason"] = "no_term_date_55_plus_in_2025"
+    df.loc[mask_dist_55_plus_non, "correction_reason"] = "no_term_date_55_plus_in_txn_year"
 
 
     # ------------------------------------------------------------
