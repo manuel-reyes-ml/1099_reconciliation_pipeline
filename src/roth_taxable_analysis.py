@@ -73,11 +73,11 @@ Public API
 - run_roth_taxable_analysis(matrix_df, relius_demo_df, relius_roth_basis_df) -> pd.DataFrame
 """
 
-from __future__ import annotations
+from __future__ import annotations   # makes type hints ("annotations") be stored as strings.
 
 import pandas as pd
 
-from .config import (
+from .config import (                # '.' in .config looks for a sibling module inside src/
     AGE_TAXCODE_CONFIG,
     INHERITED_PLAN_IDS,
     ROTH_TAXCODE_CONFIG,
