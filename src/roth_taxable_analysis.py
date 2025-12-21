@@ -40,7 +40,8 @@ Core rules (priority)
    - If roth_basis_amt >= gross_2025_total (per plan_id+ssn, txn_year==2025)
      suggest taxable = 0 (no UPDATE if Matrix already 0).
 2) Qualified Roth:
-   - age_at_txn >= 59.5 AND (txn_year - valid_start_year) >= 5
+   - Attained 59.5 within txn_year (dob + 59y6m on/before 12/31 of txn_year)
+     AND (txn_year - valid_start_year) >= 5
      suggest taxable = 0 (no UPDATE if Matrix already 0).
 3) Roth initial year mismatch:
    - If valid basis year differs from Matrix initial year -> suggest basis year
@@ -51,10 +52,15 @@ Core rules (priority)
    - If fed_taxable_amt > 0 and gross_amt <= fed_taxable_amt * 1.15 and no prior
      correction/review -> flag for review.
 6) Roth age-based tax codes:
-   - Tax code 1 must be "B"; tax code 2 follows age-based rules:
-     * age_at_txn >= 59.5 -> "7"
-     * else if term_date exists -> "2" if age_at_termination >= 55 else "1"
-     * else -> "2" if age_at_txn >= 55 else "1"
+   - Non-rollover Roth distributions: tax code 1 must be "B"; tax code 2 follows
+     year-end attainment rules:
+     * attained 59.5 within txn_year -> "7"
+     * else if term_date exists -> "2" if attained 55 within term_year else "1"
+     * else -> "2" if attained 55 within txn_year else "1"
+   - Roth rollovers: normalized to tax code 1 = "H" (examples: B+G => H,
+     G+blank => H, blank+G => H), and Roth rollovers are NOT evaluated under
+     the non-rollover age-based B* expectations. Engine C still runs taxable,
+     basis, and year checks on rollover-coded rows.
 
 Correction vs review handling
 -----------------------------
@@ -193,7 +199,7 @@ def run_roth_taxable_analysis(
     df["age_at_termination"] = _compute_age_years(df["dob"], df["term_date"])
 
     df["gross_amt"] = _to_numeric(df["gross_amt"])
-    df["fed_taxable_amt"] = _to_numeric(df.get("fed_taxable_amt"))
+    df["fed_taxable_amt"] = _to_numeric(df.get("fed_taxable_amt", pd.Series(pd.NA, index=df.index)))
     df["roth_basis_amt"] = _to_numeric(df["roth_basis_amt"])
 
     df["first_roth_tax_year"] = _to_numeric(df["first_roth_tax_year"])
@@ -233,21 +239,20 @@ def run_roth_taxable_analysis(
     current_code1 = normalize_tax_code_series(df.get("tax_code_1", pd.Series(pd.NA, index=df.index))).fillna("")
     current_code2 = normalize_tax_code_series(df.get("tax_code_2", pd.Series(pd.NA, index=df.index))).fillna("")
 
-    # Roth tax-code exclusions (pre-processing)
     tc_cfg = ROTH_TAXCODE_CONFIG
-    mask_excluded_special = (current_code1 == tc_cfg.roth_rollover_code) | (
+    mask_engine_excluded = current_code1.isin(tc_cfg.excluded_codes_taxcode)
+    mask_taxcode_locked = (current_code1 == tc_cfg.roth_rollover_code) | (
         (current_code1 == tc_cfg.roth_code) & (current_code2 == tc_cfg.death_code)
     )
-    mask_excluded_taxcode = current_code1.isin(tc_cfg.excluded_codes_taxcode)
-    mask_excluded = mask_excluded_special | mask_excluded_taxcode
+    df["tax_code_locked"] = mask_taxcode_locked
 
     # Roth tax-code correction rules (pre-taxable)
-    mask_fix_b_g = (current_code1 == tc_cfg.roth_code) & (current_code2 == tc_cfg.rollover_code) & ~mask_excluded
-    mask_fix_g_4 = (current_code1 == tc_cfg.rollover_code) & (current_code2 == tc_cfg.death_code) & ~mask_excluded
-    mask_fix_4_blank = (current_code1 == tc_cfg.death_code) & (current_code2 == "") & ~mask_excluded
-    mask_fix_blank_4 = (current_code2 == tc_cfg.death_code) & (current_code1 == "") & ~mask_excluded
-    mask_fix_g_blank = (current_code1 == tc_cfg.rollover_code) & (current_code2 == "") & ~mask_excluded
-    mask_fix_blank_g = (current_code1 == "") & (current_code2 == tc_cfg.rollover_code) & ~mask_excluded
+    mask_fix_b_g = (current_code1 == tc_cfg.roth_code) & (current_code2 == tc_cfg.rollover_code) & ~mask_engine_excluded
+    mask_fix_g_4 = (current_code1 == tc_cfg.rollover_code) & (current_code2 == tc_cfg.death_code) & ~mask_engine_excluded
+    mask_fix_4_blank = (current_code1 == tc_cfg.death_code) & (current_code2 == "") & ~mask_engine_excluded
+    mask_fix_blank_4 = (current_code2 == tc_cfg.death_code) & (current_code1 == "") & ~mask_engine_excluded
+    mask_fix_g_blank = (current_code1 == tc_cfg.rollover_code) & (current_code2 == "") & ~mask_engine_excluded
+    mask_fix_blank_g = (current_code1 == "") & (current_code2 == tc_cfg.rollover_code) & ~mask_engine_excluded
 
     df.loc[mask_fix_b_g, "suggested_tax_code_1"] = tc_cfg.roth_rollover_code
     _append_reason(df, mask_fix_b_g, "roth_rollover_code_fix_B_G_to_H")
@@ -288,7 +293,7 @@ def run_roth_taxable_analysis(
     )
 
     # Taxable / basis / year logic (active rows only)
-    active_mask = ~mask_excluded
+    active_mask = ~mask_engine_excluded
 
     basis_mask = (
         active_mask
@@ -303,9 +308,14 @@ def run_roth_taxable_analysis(
     normal_age_months = int(round((age_cfg.normal_age_years - normal_age_years) * 12))
     term_rule_years = int(age_cfg.term_rule_age_years)
     term_rule_months = int(round((age_cfg.term_rule_age_years - term_rule_years) * 12))
+    qualified_age_years = int(cfg.qualified_age_years)
+    qualified_age_months = int(round((cfg.qualified_age_years - qualified_age_years) * 12))
 
     attained_59_5_in_txn_year = attained_age_by_year_end(
         df["dob"], df["txn_year"], years=normal_age_years, months=normal_age_months
+    )
+    attained_qualified_in_txn_year = attained_age_by_year_end(
+        df["dob"], df["txn_year"], years=qualified_age_years, months=qualified_age_months
     )
     attained_55_in_txn_year = attained_age_by_year_end(
         df["dob"], df["txn_year"], years=term_rule_years, months=term_rule_months
@@ -315,7 +325,7 @@ def run_roth_taxable_analysis(
     )
     raw_qualified_mask = (
         active_mask
-        & attained_59_5_in_txn_year
+        & attained_qualified_in_txn_year
         & start_year_valid
         & (df["txn_year"] - start_year).ge(cfg.qualified_years_since_first)
     )
@@ -362,7 +372,13 @@ def run_roth_taxable_analysis(
     has_dob = df["dob"].notna()
     has_txn_year = df["txn_year"].notna()
     has_term_year = df["term_year"].notna()
-    mask_age_applicable = active_mask & ~mask_taxcode_override & has_dob & has_txn_year
+    mask_age_applicable = (
+        active_mask
+        & ~mask_taxcode_override
+        & ~mask_taxcode_locked
+        & has_dob
+        & has_txn_year
+    )
     mask_age_normal = mask_age_applicable & attained_59_5_in_txn_year
     mask_under_normal = mask_age_applicable & ~mask_age_normal
 
@@ -430,7 +446,7 @@ def run_roth_taxable_analysis(
     )
 
     # Exclusion handling
-    df.loc[mask_excluded, "match_status"] = tc_cfg.status_excluded
+    df.loc[mask_engine_excluded, "match_status"] = tc_cfg.status_excluded
 
     # Finalize actions and match_status precedence
     action_joiner = tc_cfg.action_joiner
@@ -439,9 +455,9 @@ def run_roth_taxable_analysis(
     has_update = df["actions"].apply(lambda a: tc_cfg.action_update in a if a is not None else False)
     has_investigate = df["actions"].apply(lambda a: tc_cfg.action_investigate in a if a is not None else False)
 
-    df.loc[~mask_excluded & has_update, "match_status"] = cfg.status_needs_correction
-    df.loc[~mask_excluded & ~has_update & has_investigate, "match_status"] = cfg.status_needs_review
-    df.loc[~mask_excluded & ~has_update & ~has_investigate, "match_status"] = cfg.status_no_action
+    df.loc[~mask_engine_excluded & has_update, "match_status"] = cfg.status_needs_correction
+    df.loc[~mask_engine_excluded & ~has_update & has_investigate, "match_status"] = cfg.status_needs_review
+    df.loc[~mask_engine_excluded & ~has_update & ~has_investigate, "match_status"] = cfg.status_no_action
 
     # Correction reasons with bullet + newline
     reason_joiner = tc_cfg.reason_joiner
