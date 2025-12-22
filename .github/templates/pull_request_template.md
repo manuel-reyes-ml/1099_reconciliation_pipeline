@@ -25,7 +25,7 @@ Notes:
 - [ ] <!-- e.g., Update notebooks for validation -->
 
 ### Out of scope
-- [ ] <!-- e.g., Backfilling historical years or refactoring unrelated modules -->
+- <!-- e.g., Backfilling historical years or refactoring unrelated modules -->
 
 ---
 
