@@ -51,14 +51,15 @@ Non-Roth plans:
           - age at distribution < 55 -> Tax Code 1 = "1"
           - age at distribution >= 55 -> Tax Code 1 = "2"
 
-Roth plans (identified by plan_id starting with "300005" OR plan_id ending in "R"):
+Roth plans (identified by config-driven prefixes/suffixes; defaults to plan_id
+starting with "300005" or ending in "R"):
   - Tax Code 1 must be "B"
   - Tax Code 2 is computed using the same age logic as above (1 / 2 / 7)
 
 Exclusions (not processed by this engine)
 ----------------------------------------
-- Roth plans (plan_id startswith "300005" OR endswith "R") are handled by
-  `roth_taxable_analysis` (Engine C).
+- Roth plans (config-driven prefixes/suffixes; defaults to plan_id starting with
+  "300005" or ending in "R") are handled by `roth_taxable_analysis` (Engine C).
 - Matrix rows where tax_code_1 indicates rollover codes ("G", "H"), because those
   codes are driven by distribution type rather than age.
 - Plans listed in INHERITED_PLAN_IDS, because inherited-plan logic is handled by
@@ -92,12 +93,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import AGE_TAXCODE_CONFIG, INHERITED_PLAN_IDS
+from .config import AGE_TAXCODE_CONFIG, INHERITED_PLAN_IDS, ROTH_TAXABLE_CONFIG
 
 from .normalizers import (
+    attained_age_by_year_end,
     normalize_ssn_series,
     normalize_tax_code_series,
     normalize_text_series,
+    _is_roth_plan,
     to_date_series,
 )
 
@@ -228,52 +231,6 @@ def attach_demo_to_matrix(
 
 
 
-def attained_age_by_year_end(
-    dob_series: pd.Series,
-    year_series: pd.Series,
-    *,
-    years: int,
-    months: int = 0,
-) -> pd.Series:
-    """
-    Determine if an attained age threshold is met by Dec 31 of the given year.
-
-    Example: for 59.5 threshold, we check whether dob + 59 years + 6 months is
-    on/before 12/31 of txn_year.
-    """
-    dob_dt = pd.to_datetime(dob_series, errors="coerce")
-    years_int = pd.to_numeric(year_series, errors="coerce").astype("Int64")
-    year_end = pd.to_datetime(years_int.astype("string") + "-12-31", errors="coerce")
-    threshold_date = dob_dt + pd.DateOffset(years=years, months=months)
-    result = pd.Series(False, index=dob_series.index)
-    valid = dob_dt.notna() & year_end.notna()
-    result.loc[valid] = threshold_date[valid] <= year_end[valid]
-    return result
-
-
-
-def _is_roth_plan_id(plan_id: object) -> bool:
-
-    """
-    
-    Identify Roth plans by plan_id pattern:
-
-        - Any plan_id starting with '300005'
-        - Any plan_id ending with 'R'
-    
-    Adjust if business rules change.
-
-    """
-
-    if pd.isna(plan_id):
-        return False
-
-    s = str(plan_id).strip().upper()
-
-    return s.startswith("300005") or s.endswith("R")
-
-
-
 def run_age_taxcode_analysis(
         matrix_df: pd.DataFrame,
         relius_demo_df: pd.DataFrame,
@@ -300,9 +257,9 @@ def run_age_taxcode_analysis(
 
     Additional Roth rules:
 
-        - Roth plans are those where:
-            * plan_id starts with '300005', OR
-            * plan_id ends with 'R'.
+        - Roth plans are those where plan_id matches configured prefixes/suffixes
+          (default: prefix '300005' or suffix 'R'), using case-insensitive
+          matching after stripping whitespace.
         
         - For Roth plans, expected codes are:
             * Tax code 1: 'B'
@@ -342,7 +299,11 @@ def run_age_taxcode_analysis(
     # 3) Flags: rollover, inherited, Roth (Roth handled by Engine C)
     mask_rollover_code = df["tax_code_1"].isin(cfg.excluded_codes)   # G, H
     mask_inherited_plan = df["plan_id"].isin(INHERITED_PLAN_IDS)
-    is_roth_plan = df["plan_id"].apply(_is_roth_plan_id)
+    is_roth_plan = _is_roth_plan(
+        df["plan_id"],
+        ROTH_TAXABLE_CONFIG,
+        case_insensitive=True,
+    )
 
     # Filter out Roth rows entirely
     df = df[~is_roth_plan].copy()

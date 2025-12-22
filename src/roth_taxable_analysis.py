@@ -30,7 +30,8 @@ Inputs
 
 Scope
 -----
-- Roth plans only (plan_id startswith "300005" OR endswith "R")
+- Roth plans only (config-driven prefixes/suffixes; defaults to plan_id starting
+  with "300005" or ending in "R")
 - Exclude inherited plans (INHERITED_PLAN_IDS)
 - Do NOT exclude rollovers
 
@@ -84,79 +85,17 @@ from .config import (                # '.' in .config looks for a sibling module
     ROTH_TAXABLE_CONFIG,
     RothTaxableConfig,
 )
-from .normalizers import normalize_tax_code_series
-
-
-def _normalize_plan_id(plan_id: pd.Series) -> pd.Series:
-    return plan_id.astype(str).str.strip()
-
-
-def _to_datetime(series: pd.Series) -> pd.Series:
-    return pd.to_datetime(series, errors="coerce")
-
-
-def _to_numeric(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series, errors="coerce")
-
-
-def _compute_age_years(dob: pd.Series, asof: pd.Series) -> pd.Series:
-    dob_year = dob.dt.year
-    asof_year = asof.dt.year
-    return (asof_year - dob_year).astype("Float64")
-
-
-def attained_age_by_year_end(
-    dob_series: pd.Series,
-    year_series: pd.Series,
-    *,
-    years: int,
-    months: int = 0,
-) -> pd.Series:
-    """
-    Determine if an attained age threshold is met by Dec 31 of the given year.
-
-    Example: for 59.5 threshold, we check whether dob + 59 years + 6 months is
-    on/before 12/31 of txn_year.
-    """
-    dob_dt = pd.to_datetime(dob_series, errors="coerce")
-    years_int = pd.to_numeric(year_series, errors="coerce").astype("Int64")
-    year_end = pd.to_datetime(years_int.astype("string") + "-12-31", errors="coerce")
-    threshold_date = dob_dt + pd.DateOffset(years=years, months=months)
-    result = pd.Series(False, index=dob_series.index)
-    valid = dob_dt.notna() & year_end.notna()
-    result.loc[valid] = threshold_date[valid] <= year_end[valid]
-    return result
-
-
-def _is_roth_plan(series: pd.Series, cfg: RothTaxableConfig) -> pd.Series:
-    filled = series.fillna("")
-    prefix_match = pd.Series(False, index=filled.index)
-    suffix_match = pd.Series(False, index=filled.index)
-    if cfg.roth_plan_prefixes:
-        prefix_match = filled.str.startswith(cfg.roth_plan_prefixes)
-    if cfg.roth_plan_suffixes:
-        suffix_match = filled.str.endswith(cfg.roth_plan_suffixes)
-    return prefix_match | suffix_match
-
-
-def _compute_start_year(df: pd.DataFrame) -> pd.Series:
-    return df["first_roth_tax_year"].combine_first(df["roth_initial_contribution_year"])
-
-
-def _append_reason(df: pd.DataFrame, mask: pd.Series, reason: str) -> None:
-    """Append a reason token to per-row reason lists for rows where mask is True."""
-    idx = mask[mask].index
-    for i in idx:
-        if reason not in df.at[i, "correction_reasons"]:
-            df.at[i, "correction_reasons"].append(reason)
-
-
-def _append_action(df: pd.DataFrame, mask: pd.Series, action: str) -> None:
-    """Append an action token to per-row action lists for rows where mask is True."""
-    idx = mask[mask].index
-    for i in idx:
-        if action not in df.at[i, "actions"]:
-            df.at[i, "actions"].append(action)
+from .normalizers import (
+    _append_action,
+    _append_reason,
+    _compute_age_years,
+    _is_roth_plan,
+    _to_datetime,
+    attained_age_by_year_end,
+    normalize_plan_id_series,
+    normalize_tax_code_series,
+    to_numeric_series,
+)
 
 
 def run_roth_taxable_analysis(
@@ -173,7 +112,7 @@ def run_roth_taxable_analysis(
     """
     
     df = matrix_df.copy()
-    df["plan_id"] = _normalize_plan_id(df["plan_id"])
+    df["plan_id"] = normalize_plan_id_series(df["plan_id"], string_dtype=False)
 
     mask_roth = _is_roth_plan(df["plan_id"], cfg)
     mask_not_inherited = ~df["plan_id"].isin(INHERITED_PLAN_IDS)
@@ -198,12 +137,12 @@ def run_roth_taxable_analysis(
     df["age_at_txn"] = _compute_age_years(df["dob"], df["txn_date"])
     df["age_at_termination"] = _compute_age_years(df["dob"], df["term_date"])
 
-    df["gross_amt"] = _to_numeric(df["gross_amt"])
-    df["fed_taxable_amt"] = _to_numeric(df.get("fed_taxable_amt", pd.Series(pd.NA, index=df.index)))
-    df["roth_basis_amt"] = _to_numeric(df["roth_basis_amt"])
+    df["gross_amt"] = to_numeric_series(df["gross_amt"])
+    df["fed_taxable_amt"] = to_numeric_series(df.get("fed_taxable_amt", pd.Series(pd.NA, index=df.index)))
+    df["roth_basis_amt"] = to_numeric_series(df["roth_basis_amt"])
 
-    df["first_roth_tax_year"] = _to_numeric(df["first_roth_tax_year"])
-    df["roth_initial_contribution_year"] = _to_numeric(df["roth_initial_contribution_year"])
+    df["first_roth_tax_year"] = to_numeric_series(df["first_roth_tax_year"])
+    df["roth_initial_contribution_year"] = to_numeric_series(df["roth_initial_contribution_year"])
 
     first_year_valid = (
         df["first_roth_tax_year"].notna()
