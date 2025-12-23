@@ -68,6 +68,14 @@ Notes:
 - [ ] Expected columns exist in canonical schema
 - [ ] Dtypes verified (dates/Int64/Float64)
 
+### Validation (executed)
+```bash
+source .venv/bin/activate
+python -m pytest tests/
+```
+
+Results:
+
 ### Rule verification (recommended)
 - [ ] Added/updated notebook examples for key scenarios:
   - [ ] Attained 59½ within txn_year
@@ -101,6 +109,12 @@ Notes:
 
 ### Screenshots / sample outputs (optional)
 <!-- Attach masked screenshots or paste small masked tables. Avoid any sensitive values. -->
+<details>
+<summary>pytest run output (local)</summary>
+
+<!-- attach screenshot here -->
+
+</details>
 ---
 ## 🔗 Linking
 - Closes #<issue-number>
