@@ -430,6 +430,7 @@ def run_roth_taxable_analysis(
         "gross_amt",
         "roth_initial_contribution_year",
         "first_roth_tax_year",
+        "start_roth_year",
         "roth_basis_amt",
         "age_at_txn",
         "suggested_taxable_amt",
