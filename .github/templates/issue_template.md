@@ -3,18 +3,14 @@
 ### 🎯 Objective
 - **What problem does this Issue solve?**
 - **What is the expected output/deliverable?**
-
 ---
-
 ### 📌 Scope
 **In scope**
 - [ ] …
 
 **Out of scope**
 - 
-
 ---
-
 ### 🧩 Implementation Plan
 **Files to change / add**
 - [ ] `src/...`
@@ -26,9 +22,7 @@
 1. …
 2. …
 3. …
-
 ---
-
 ### 🔧 Branch + Commit Plan
 **Branch**
 - `<branch-name>`
@@ -37,9 +31,7 @@
 1. `<commit message 1>`
 2. `<commit message 2>`
 3. (optional) `<commit message 3>`
-
 ---
-
 ### 🧪 Validation Plan (Local)
 **Smoke checks**
 - [ ] `python -c "import ..."` passes
@@ -54,23 +46,17 @@
 **Export checks (if applicable)**
 - [ ] Template headers found (no misalignment)
 - [ ] Output file opens in Excel and columns populate correctly
-
 ---
-
 ### ✅ Acceptance Criteria
 - [ ] AC1: …
 - [ ] AC2: …
 - [ ] AC3: …
-
 ---
-
 ### 🧯 Risks / Edge Cases
 - **Potential risk:** …
 - **Edge case:** missing DOB / missing year / duplicates / NaNs
 - **Mitigation:** …
-
 ---
-
 ### 📎 PR Checklist
 When opening the PR:
 - [ ] Include summary + rationale

@@ -14,9 +14,7 @@ Notes:
 
 **Expected output / deliverable**  
 <!-- Example: Corrected Engine C logic + updated notebook validation cells -->
-
 ---
-
 ## 📌 Scope
 
 ### In scope
@@ -26,9 +24,7 @@ Notes:
 
 ### Out of scope
 - <!-- e.g., Backfilling historical years or refactoring unrelated modules -->
-
 ---
-
 ## 🧩 Implementation Plan (What changed)
 
 ### Files changed / added
@@ -41,9 +37,7 @@ Notes:
 1. <!-- Step 1: Describe the change at a conceptual level -->
 2. <!-- Step 2 -->
 3. <!-- Step 3 -->
-
 ---
-
 ## 🧠 Data + Logic Notes
 
 ### Business rules implemented / updated
@@ -61,9 +55,7 @@ Notes:
 - **Null-handling:** <!-- e.g., missing DOB/term_date behavior -->
 - **Type enforcement:** <!-- e.g., dates/numerics normalized -->
 - **Idempotence:** <!-- does rerunning produce stable results? -->
-
 ---
-
 ## 🧪 Validation (Local)
 
 ### Smoke checks
@@ -87,24 +79,18 @@ Notes:
 ### Export checks (if applicable)
 - [ ] Output opens in Excel and columns populate correctly
 - [ ] Template headers found (no misalignment)
-
 ---
-
 ## ✅ Acceptance Criteria
 - [ ] AC1: <!-- measurable outcome -->
 - [ ] AC2:
 - [ ] AC3:
-
 ---
-
 ## 🧯 Risks / Edge Cases
 
 - **Potential risk:** <!-- e.g., DOB missing leads to skipped age logic -->
 - **Edge cases covered:** <!-- missing DOB/term_date; NaNs; duplicate SSN per plan -->
 - **Mitigation:** <!-- e.g., INVESTIGATE action + correction_reason tokens -->
-
 ---
-
 ## 📎 Reviewer Notes
 
 ### What to focus on
@@ -115,8 +101,6 @@ Notes:
 
 ### Screenshots / sample outputs (optional)
 <!-- Attach masked screenshots or paste small masked tables. Avoid any sensitive values. -->
-
 ---
-
 ## 🔗 Linking
 - Closes #<issue-number>
