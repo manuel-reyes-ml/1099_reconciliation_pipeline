@@ -595,7 +595,9 @@ def validate_1099r_code(code):
 - `4` = Death benefit
 - `7` = Normal distribution
 - `8` = Excess contributions
-- `G` = Rollover (not taxable)
+- `B` = Distribution from Roth sources
+- `G` = Rollover from pre-tax distribution (not taxable)
+- `H` = Rollover from Roth distribution (no taxable)
 - `L` = Loan treated as distribution
 - `P` = Excess contributions plus earnings
 - `Q` = Qualified Roth distribution
@@ -658,6 +660,27 @@ def cross_validate(gross, taxable, code, age=None):
 **Overall validation pass rate:** ~95% of records pass all checks
 
 **Records requiring manual review:** ~5% (500 out of 10,000)
+
+---
+
+### Runtime Validation Flags
+
+Cleaners emit the following columns to surface validation outcomes without
+dropping records:
+
+- `ssn_valid`: boolean flag for SSN validation.
+- `amount_valid`: boolean flag for gross/taxable/withholding checks.
+- `date_valid`: boolean flag for distribution/payment date logic.
+- `code_1099r_valid`: boolean flag for IRS code validation.
+- `validation_issues`: list of issue tokens for failed validations and
+  cross-field logic. Current tokens include:
+  - `ssn_invalid`
+  - `amount_invalid`
+  - `date_invalid`
+  - `code_1099r_invalid`
+  - `cross_code_g_taxable_over_10pct`
+  - `cross_taxable_exceeds_gross_150pct`
+  - `cross_code1_age_over_59_5`
 
 ---
 
