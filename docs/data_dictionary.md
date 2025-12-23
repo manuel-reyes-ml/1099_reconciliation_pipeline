@@ -595,7 +595,9 @@ def validate_1099r_code(code):
 - `4` = Death benefit
 - `7` = Normal distribution
 - `8` = Excess contributions
-- `G` = Rollover (not taxable)
+- `B` = Distribution from Roth sources
+- `G` = Rollover from pre-tax distribution (not taxable)
+- `H` = Rollover from Roth distribution (no taxable)
 - `L` = Loan treated as distribution
 - `P` = Excess contributions plus earnings
 - `Q` = Qualified Roth distribution
