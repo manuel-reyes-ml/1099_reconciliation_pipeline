@@ -89,6 +89,7 @@ from .normalizers import (
     _append_action,
     _append_reason,
     _compute_age_years,
+    _compute_start_year,
     _is_roth_plan,
     _to_datetime,
     attained_age_by_year_end,
@@ -150,13 +151,13 @@ def run_roth_taxable_analysis(
         & df["first_roth_tax_year"].between(cfg.valid_year_min, cfg.valid_year_max)
     )
 
-    start_year = df["first_roth_tax_year"].where(first_year_valid, df["roth_initial_contribution_year"])
+    start_year = _compute_start_year(df)
     start_year_valid = (
         start_year.notna()
         & start_year.gt(0)
         & start_year.between(cfg.valid_year_min, cfg.valid_year_max)
     )
-    df["start_roth_year"] = start_year
+    df["start_roth_year"] = start_year.where(start_year_valid)
 
     mask_2025 = df["txn_year"] == cfg.basis_coverage_year
     gross_2025 = (
@@ -429,6 +430,7 @@ def run_roth_taxable_analysis(
         "gross_amt",
         "roth_initial_contribution_year",
         "first_roth_tax_year",
+        "start_roth_year",
         "roth_basis_amt",
         "age_at_txn",
         "suggested_taxable_amt",
