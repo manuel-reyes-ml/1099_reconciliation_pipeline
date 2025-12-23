@@ -117,11 +117,17 @@ from .config import (
 )
 
 from .normalizers import (
+    build_validation_issues,
     normalize_plan_id_series,
     normalize_ssn_series,
     normalize_state_series,
     normalize_tax_code_series,
     normalize_text_series,
+    cross_validate_series,
+    validate_amounts_series,
+    validate_dates_series,
+    validate_1099r_code_series,
+    validate_ssn_series,
     to_date_series,
     to_int64_nullable_series,
     to_numeric_series,
@@ -316,6 +322,45 @@ def clean_matrix(
     # Convenience: participant name normalized
     if "participant_name" in df.columns:
         df["partipant_name"] = normalize_text_series(df["participant_name"], strip=True, upper=False)
+
+    # Validation flags and issues
+    ssn_valid = (
+        validate_ssn_series(df["ssn"])
+        if "ssn" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    amount_valid = (
+        validate_amounts_series(df["gross_amt"], df["fed_taxable_amt"])
+        if {"gross_amt", "fed_taxable_amt"} <= set(df.columns)
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    date_valid = (
+        validate_dates_series(df["txn_date"])
+        if "txn_date" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    code_1099r_valid = (
+        validate_1099r_code_series(df["tax_code_1"])
+        if "tax_code_1" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    cross_field_issues = (
+        cross_validate_series(df["gross_amt"], df["fed_taxable_amt"], df["tax_code_1"])
+        if {"gross_amt", "fed_taxable_amt", "tax_code_1"} <= set(df.columns)
+        else None
+    )
+
+    df["ssn_valid"] = ssn_valid
+    df["amount_valid"] = amount_valid
+    df["date_valid"] = date_valid
+    df["code_1099r_valid"] = code_1099r_valid
+    df["validation_issues"] = build_validation_issues(
+        ssn_valid,
+        amount_valid,
+        date_valid,
+        code_1099r_valid,
+        cross_field_issues=cross_field_issues,
+    )
     
     
     # 4) Filter out unwanted accounts and transaction types

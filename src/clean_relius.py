@@ -112,8 +112,13 @@ from .config import (
     RELIUS_MATCH_KEYS,
 )
 from .normalizers import (
+    build_validation_issues,
     normalize_ssn_series,
     normalize_text_series,
+    validate_amounts_series,
+    validate_dates_series,
+    validate_1099r_code_series,
+    validate_ssn_series,
     to_date_series,
     to_int64_nullable_series,
     to_numeric_series,
@@ -284,6 +289,39 @@ def clean_relius(
             + " "
             + normalize_text_series(df["last_name"], strip=True, upper=False).fillna("")
         ).str.strip().replace("", pd.NA) # removes leading/trailing spaces in case one side was empty
+
+    # Validation flags and issues
+    ssn_valid = (
+        validate_ssn_series(df["ssn"])
+        if "ssn" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    amount_valid = (
+        validate_amounts_series(df["gross_amt"])
+        if "gross_amt" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    date_valid = (
+        validate_dates_series(df["exported_date"])
+        if "exported_date" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    code_1099r_valid = (
+        validate_1099r_code_series(df["dist_code_1"])
+        if "dist_code_1" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+
+    df["ssn_valid"] = ssn_valid
+    df["amount_valid"] = amount_valid
+    df["date_valid"] = date_valid
+    df["code_1099r_valid"] = code_1099r_valid
+    df["validation_issues"] = build_validation_issues(
+        ssn_valid,
+        amount_valid,
+        date_valid,
+        code_1099r_valid,
+    )
     
     # 4) Optionally drop rows missing key fields for matching
     match_key_cols = [c for c in RELIUS_MATCH_KEYS if c in df.columns]
