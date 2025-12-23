@@ -228,7 +228,12 @@ def _compute_age_years(dob: pd.Series, asof: pd.Series) -> pd.Series:
 
 def _compute_start_year(df: pd.DataFrame) -> pd.Series:
     """Choose the first non-null Roth start year across year columns."""
-    return df["first_roth_tax_year"].combine_first(df["roth_initial_contribution_year"])
+    first_year = pd.to_numeric(df["first_roth_tax_year"], errors="coerce")
+    initial_year = pd.to_numeric(df["roth_initial_contribution_year"], errors="coerce")
+    first_year = first_year.where(first_year.round().eq(first_year))
+    initial_year = initial_year.where(initial_year.round().eq(initial_year))
+    combined = first_year.combine_first(initial_year)
+    return combined.astype("Int64")
 
 
 def _append_reason(df: pd.DataFrame, mask: pd.Series, reason: str) -> None:
