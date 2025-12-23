@@ -44,7 +44,7 @@ Notes:
 
 ---
 
-## 🧠 Data + Logic Notes (DA/DE Showcase)
+## 🧠 Data + Logic Notes
 
 ### Business rules implemented / updated
 - **Rule(s):** <!-- concise description -->
