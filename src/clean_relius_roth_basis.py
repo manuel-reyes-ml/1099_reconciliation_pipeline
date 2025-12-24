@@ -62,6 +62,7 @@ import warnings
 import pandas as pd
 from .normalizers import (
     build_validation_issues,
+    normalize_plan_id_series,
     normalize_ssn_series,
     normalize_text_series,
     validate_amounts_series,
@@ -135,7 +136,10 @@ def clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame:
                 stacklevel=2,
             )
 
-    for col in ["plan_id", "first_name", "last_name"]:
+    if "plan_id" in df.columns:
+        df["plan_id"] = normalize_plan_id_series(df["plan_id"])
+
+    for col in ["first_name", "last_name"]:
         if col in df.columns:
             df[col] = normalize_text_series(df[col], strip=True, upper=False)
 
