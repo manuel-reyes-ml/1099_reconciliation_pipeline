@@ -74,6 +74,7 @@ import pandas as pd #The main data manipulation library for data tables
 from .config import (
     SAMPLE_DIR,
     RELIUS_COLUMN_MAP,
+    RELIUS_DEMO_COLUMN_MAP,
     RELIUS_ROTH_BASIS_COLUMN_MAP,
     MATRIX_COLUMN_MAP,
 )
@@ -201,6 +202,49 @@ def load_relius_roth_basis_excel(
 
     return df
 
+
+def load_relius_demo_excel(
+        path: Optional[Path] = None,
+        use_sample_if_none: bool = True,
+        sheet_name: Optional[str] = 0,
+) -> pd.DataFrame:
+
+    """
+
+    Load Relius participant demographics export from Excel file.
+
+    Args:
+        path:
+            Path to the Excel file. If None and use_sample_if_none is True,
+            defaults to SAMPLE_DIR / 'relius_demo_sample.xlsx'.
+        use_sample_if_none:
+            If True and path is None, load from the sample directory.
+        sheet_name:
+            Sheet name or index to read (defaults to first sheet).
+
+    Returns:
+        pandas.DataFrame with raw Relius demo data (no clearning/renaming yet).
+
+    """
+
+    if path is None:
+        if not use_sample_if_none:
+            raise ValueError("No path provided and use_sample_if_none=False.")
+        path = SAMPLE_DIR / "relius_demo_sample.xlsx"
+
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Relius Demo Excel file not found at: {path}")
+
+    df = pd.read_excel(path, sheet_name=sheet_name)
+
+    # Normalize headers to handle whitespace/case variance before validation
+    df.columns = [c.strip().upper() for c in df.columns]
+
+    required_cols = list(RELIUS_DEMO_COLUMN_MAP.keys())
+    _validate_columns(df, required_cols, source_name="Relius Demo")
+
+    return df
 
 
 def load_matrix_excel(
