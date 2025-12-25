@@ -21,6 +21,11 @@ Expected output schema (canonical)
 - last_name
 - dob
 - term_date
+- ssn_valid
+- amount_valid
+- date_valid
+- code_1099r_valid
+- validation_issues
 
 Public API
 ----------
@@ -41,10 +46,13 @@ import pandas as pd
 
 from .config import RELIUS_DEMO_COLUMN_MAP
 from .normalizers import (
+    build_validation_issues,
     normalize_plan_id_series,
     normalize_ssn_series,
     normalize_text_series,
     to_date_series,
+    validate_dates_series,
+    validate_ssn_series,
 )
 
 
@@ -100,6 +108,30 @@ def clean_relius_demo(raw_df: pd.DataFrame) -> pd.DataFrame:
     df["plan_id"] = normalize_plan_id_series(df["plan_id"])
     df["first_name"] = normalize_text_series(df["first_name"], strip=True, upper=False)
     df["last_name"] = normalize_text_series(df["last_name"], strip=True, upper=False)
+
+    # Validation flags and issues
+    ssn_valid = (
+        validate_ssn_series(df["ssn"])
+        if "ssn" in df.columns
+        else pd.Series(pd.NA, index=df.index, dtype="boolean")
+    )
+    amount_valid = pd.Series(pd.NA, index=df.index, dtype="boolean")
+    if "term_date" in df.columns:
+        date_valid = validate_dates_series(df["term_date"]).mask(df["term_date"].isna())
+    else:
+        date_valid = pd.Series(pd.NA, index=df.index, dtype="boolean")
+    code_1099r_valid = pd.Series(pd.NA, index=df.index, dtype="boolean")
+
+    df["ssn_valid"] = ssn_valid
+    df["amount_valid"] = amount_valid
+    df["date_valid"] = date_valid
+    df["code_1099r_valid"] = code_1099r_valid
+    df["validation_issues"] = build_validation_issues(
+        ssn_valid,
+        amount_valid,
+        date_valid,
+        code_1099r_valid,
+    )
 
     # Drop rows with no usable SSN
     df = df[df["ssn"].notna()].copy()
