@@ -113,6 +113,7 @@ from .config import (
 )
 from .normalizers import (
     build_validation_issues,
+    normalize_plan_id_series,
     normalize_ssn_series,
     normalize_text_series,
     validate_amounts_series,
@@ -236,7 +237,7 @@ def clean_relius(
     # 3) Clean fields
 
     if "plan_id" in df.columns:
-        df["plan_id"] = normalize_text_series(df["plan_id"], strip=True, upper=False)
+        df["plan_id"] = normalize_plan_id_series(df["plan_id"])
 
     # SSN
     if "ssn" in df.columns:
