@@ -4,13 +4,13 @@ clean_relius_demo.py
 
 Cleaning and normalization for Relius participant demographic exports.
 
-This module reads a Relius participant master/demographics Excel export and
+This module cleans a Relius participant master/demographics export and
 transforms it into a canonical, analysis-ready pandas DataFrame for
 age-based tax-code analytics and downstream matching.
 
 Inputs
 ------
-- Relius Excel export (.xlsx) with columns:
+- Relius export DataFrame with columns:
     PLANID, SSNUM, FIRSTNAM, LASTNAM, BIRTHDATE, TERM_DATE
 
 Expected output schema (canonical)
@@ -24,7 +24,7 @@ Expected output schema (canonical)
 
 Public API
 ----------
-- clean_relius_demo(path: Path | str | bytes) -> pd.DataFrame
+- clean_relius_demo(raw_df: pd.DataFrame) -> pd.DataFrame
 
 Privacy / compliance note
 -------------------------
@@ -35,11 +35,11 @@ production version only in secure environments with proper access controls.
 
 from __future__ import annotations
 
-from pathlib import Path
 import warnings
 
 import pandas as pd
 
+from .config import RELIUS_DEMO_COLUMN_MAP
 from .normalizers import (
     normalize_plan_id_series,
     normalize_ssn_series,
@@ -48,21 +48,11 @@ from .normalizers import (
 )
 
 
-RELIUS_DEMO_COLUMN_MAP = {
-    "PLANID": "plan_id",
-    "SSNUM": "ssn",
-    "FIRSTNAM": "first_name",
-    "LASTNAM": "last_name",
-    "BIRTHDATE": "dob",
-    "TERM_DATE": "term_date",
-}
-
-
-def clean_relius_demo(path: Path | str | bytes) -> pd.DataFrame:
+def clean_relius_demo(raw_df: pd.DataFrame) -> pd.DataFrame:
 
     """
 
-    Clean the Relius participant/master file that contains
+    Clean the Relius participant/master export that contains
     - plan_id
     - ssn
     - first_name
@@ -75,7 +65,7 @@ def clean_relius_demo(path: Path | str | bytes) -> pd.DataFrame:
 
     """
 
-    df_raw = pd.read_excel(path, dtype=str)
+    df_raw = raw_df.copy()
 
     # Standardize column names so the mapping works robustly
     df_raw.columns = [c.strip().upper() for c in df_raw.columns]
