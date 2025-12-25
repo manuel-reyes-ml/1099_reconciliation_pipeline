@@ -194,6 +194,16 @@ RELIUS_ROTH_BASIS_COLUMN_MAP = {
     "Total":              "roth_basis_amt",
 }
 
+RELIUS_DEMO_COLUMN_MAP = {
+    # Raw column name     # Canonical name
+    "PLANID":    "plan_id",
+    "SSNUM":     "ssn",
+    "FIRSTNAM":  "first_name",
+    "LASTNAM":   "last_name",
+    "BIRTHDATE": "dob",
+    "TERM_DATE": "term_date",
+}
+
 
 MATRIX_COLUMN_MAP = {
     # Raw column name       # Canonical name
