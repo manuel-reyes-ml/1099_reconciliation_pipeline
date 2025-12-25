@@ -32,7 +32,9 @@ Inputs
      - tax_code_1, tax_code_2 (normalized to 1–2 characters)
      - participant_name / matrix_account (optional but recommended)
 
-2) Relius participant master / demographics file (via `clean_relius_demo()`):
+2) Relius participant master / demographics file
+   (load with `load_data.load_relius_demo_excel()`, then clean via
+   `clean_relius_demo()`):
    Expected canonical columns include:
      - plan_id
      - ssn
@@ -83,7 +85,8 @@ Important notes
 
 Public API
 ----------
-- clean_relius_demo(path) -> pd.DataFrame
+- load_relius_demo_excel(path) -> pd.DataFrame
+- clean_relius_demo(raw_df) -> pd.DataFrame
 - run_age_taxcode_analysis(matrix_df, relius_demo_df) -> pd.DataFrame
 """
 

@@ -78,6 +78,8 @@ build_correction_file.py
 │ (DOB / term date by plan + SSN) │
 └──────────────────┬───────────────────┘
 ▼
+load_relius_demo_excel (load_data.py)
+▼
 clean_relius_demo.py
 │
 ▼
