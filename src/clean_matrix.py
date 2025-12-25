@@ -230,10 +230,10 @@ def clean_matrix(
     Steps:
     1. Rename raw columns to canonical names using MATRIX_COLUMN_MAP
     2. Keep only the core columns defined in MATRIX_CORE_COLUMNS
-    3. Clean SSNs, dates, amounts, tax codes, and text fields
-    4. Filter out:
+    3. Filter out:
         - rows with matrix_account in IGNORED_MATRIX_ACCOUNTS
         - rows with txn_method in IGNORED_TXN_METHODS
+    4. Clean SSNs, dates, amounts, tax codes, and text fields
     5. Optionally drop rows missing key fields
     6. Drop Duplicate rows based on MATRIX_MATCH_KEYS
 
@@ -258,7 +258,44 @@ def clean_matrix(
     # 2) Keep only the core columns we care about
     df = _drop_unneeded_columns(df, MATRIX_CORE_COLUMNS)
 
-    # 3) Clean fields
+    # 3) Filter out unwanted accounts and transaction types
+
+    # Ignore specific Matrix accounts entirely
+    # mask_bad_acct receives a Series (vector of 1 column)
+    if "matrix_account" in df.columns:
+        # Assigns True if values are in IGNORED_MATRIX_ACCOUNTS (if any)
+        mask_bad_acct = df["matrix_account"].astype(str).isin(IGNORED_MATRIX_ACCOUNTS) # .isin() checks each row of the Series 
+    else:                                                                              # in the given Set or List.
+        # Creates a Series and assigns False to all rows (as a Series = 1 Column)
+        mask_bad_acct = pd.Series(False, index=df.index) # df.index represents all rows in the DataFrame
+
+
+    # Ignore rows where Transaction Type is in the excluded Set or List
+    if "txn_method" in df.columns:
+        # method_lower gets assigned a Series of 'tax_method' values in lower case
+        method_lower = df["txn_method"].astype(str).str.strip().str.lower() # normalize before comparing
+        mask_bad_method = method_lower.isin(IGNORED_TXN_METHODS)
+    else:
+        mask_bad_method = pd.Series(False, index=df.index)
+
+
+    # mask_bad_acct and mask_bad_method both are pandas Series of booleans indexed like df
+    # '|' in pandas is OR (logical computation) and will compare each row of the two Series
+    #   e.g.: T OR F = T ; F OR F =  F
+    #
+    # A Series of True or False will be assigned to mask_drop indexed like df
+    mask_drop = mask_bad_acct | mask_bad_method
+
+    # ~ is the bitwise NOT operator for boolean Series, it flips True <-> False,
+    #  so for mask_drop: [False, True, True]
+    #        ~mask_drop: [True, False, False]
+    #
+    # df[~mask_drop] us boolean indexing in pandas, so keep the rows where mask_drop is false (converted to True), meaning
+    #   rows that are not bad (not included on the two Lists or Sets above).
+    df = df[~mask_drop].copy() # create a new DataFrame
+
+
+    # 4) Clean fields
 
     if "plan_id" in df.columns:
         df["plan_id"] = normalize_plan_id_series(df["plan_id"])
@@ -363,43 +400,6 @@ def clean_matrix(
     )
     
     
-    # 4) Filter out unwanted accounts and transaction types
-
-    # Ignore specific Matrix accounts entirely
-    # mask_bad_acct receives a Series (vector of 1 column)
-    if "matrix_account" in df.columns:
-        # Assigns True if values are in IGNORED_MATRIX_ACCOUNTS (if any)
-        mask_bad_acct = df["matrix_account"].astype(str).isin(IGNORED_MATRIX_ACCOUNTS) # .isin() checks each row of the Series 
-    else:                                                                              # in the given Set or List.
-        # Creates a Series and assigns False to all rows (as a Series = 1 Column)
-        mask_bad_acct = pd.Series(False, index=df.index) # df.index represents all rows in the DataFrame
-    
-
-    # Ignore rows where Transaction Type is in the excluded Set or List
-    if "txn_method" in df.columns:
-        # method_lower gets assigned a Series of 'tax_method' values in lower case
-        method_lower = df["txn_method"].astype(str).str.strip().str.lower() # normalize before comparing
-        mask_bad_method = method_lower.isin(IGNORED_TXN_METHODS)
-    else:
-        mask_bad_method = pd.Series(False, index=df.index)
-    
-    
-    # mask_bad_acct and mask_bad_method both are pandas Series of booleans indexed like df
-    # '|' in pandas is OR (logical computation) and will compare each row of the two Series
-    #   e.g.: T OR F = T ; F OR F =  F
-    #
-    # A Series of True or False will be assigned to mask_drop indexed like df
-    mask_drop = mask_bad_acct | mask_bad_method
-
-    # ~ is the bitwise NOT operator for boolean Series, it flips True <-> False,
-    #  so for mask_drop: [False, True, True]
-    #        ~mask_drop: [True, False, False]
-    #
-    # df[~mask_drop] us boolean indexing in pandas, so keep the rows where mask_drop is false (converted to True), meaning
-    #   rows that are not bad (not included on the two Lists or Sets above).
-    df = df[~mask_drop].copy() # create a new DataFrame
-
-
     # 5) Optionally drop rows missing key fields for matching
     match_key_cols = [c for c in MATRIX_MATCH_KEYS if c in df.columns]
     if drop_rows_missing_keys and match_key_cols:
