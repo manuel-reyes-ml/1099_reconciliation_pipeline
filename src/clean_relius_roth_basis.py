@@ -60,6 +60,10 @@ from typing import Iterable
 import warnings
 
 import pandas as pd
+from .config import (
+    RELIUS_ROTH_BASIS_COLUMN_MAP,
+    RELIUS_ROTH_BASIS_CORE_COLUMNS,
+)
 from .normalizers import (
     build_validation_issues,
     normalize_plan_id_series,
@@ -70,25 +74,6 @@ from .normalizers import (
     to_int64_nullable_series,
     to_numeric_series,
 )
-
-ROTH_BASIS_COLUMN_MAP = {
-    "PLANID": "plan_id",
-    "SSNUM": "ssn",
-    "LASTNAM": "last_name",
-    "FIRSTNAM": "first_name",
-    "FIRSTTAXYEARROTH": "first_roth_tax_year",
-    "Total": "roth_basis_amt",
-}
-
-ROTH_BASIS_COLUMNS = [
-    "plan_id",
-    "ssn",
-    "first_name",
-    "last_name",
-    "first_roth_tax_year",
-    "roth_basis_amt",
-]
-
 
 # --- Helper functions ------------------------------------------------------------
 
@@ -117,10 +102,10 @@ def clean_relius_roth_basis(raw_df: pd.DataFrame) -> pd.DataFrame:
     df = raw_df.copy()
 
     # 1) Standardize column names
-    df = df.rename(columns=ROTH_BASIS_COLUMN_MAP)
+    df = df.rename(columns=RELIUS_ROTH_BASIS_COLUMN_MAP)
 
     # 2) Keep only the core Roth basis columns
-    df = _drop_unneeded_columns(df, ROTH_BASIS_COLUMNS)
+    df = _drop_unneeded_columns(df, RELIUS_ROTH_BASIS_CORE_COLUMNS)
 
     # 3) Normalize fields
     if "ssn" in df.columns:
