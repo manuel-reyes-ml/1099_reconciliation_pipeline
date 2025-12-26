@@ -198,6 +198,8 @@ def build_correction_dataframe(
         "New Tax Code 1",
         "New Tax Code 2",
         "New Tax Code 1+2",
+        "New Taxable Amount",
+        "New First Year contrib",
         "Reason",
         "Action",
     ]
@@ -218,6 +220,11 @@ def build_correction_dataframe(
     else:
         df_corr["participant_name_final"] = pd.NA
 
+    if "suggested_taxable_amt" not in df_corr.columns:
+        df_corr["suggested_taxable_amt"] = pd.NA
+    if "suggested_first_roth_tax_year" not in df_corr.columns:
+        df_corr["suggested_first_roth_tax_year"] = pd.NA
+
     # 6) Rename columns to the Matrix correction template name
     # rename_map is a dictionary mapping internal column names -> output column names
     rename_map = {                                              
@@ -230,6 +237,8 @@ def build_correction_dataframe(
         "tax_code_2": "Current Tax Code 2",
         "suggested_tax_code_1": "New Tax Code 1",
         "suggested_tax_code_2": "New Tax Code 2",
+        "suggested_taxable_amt": "New Taxable Amount",
+        "suggested_first_roth_tax_year": "New First Year contrib",
         "correction_reason": "Reason",
         "action": "Action",
     }
