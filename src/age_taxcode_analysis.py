@@ -19,6 +19,7 @@ Design goals
     - match_status (e.g., "match_needs_correction")
     - action (e.g., "UPDATE_1099")
     - suggested_tax_code_1 / suggested_tax_code_2
+    - new_tax_code
     - traceability fields like transaction_id, ssn, plan_id, txn_date
 
 Inputs
@@ -196,6 +197,7 @@ def run_age_taxcode_analysis(
     Returns a DataFrame that is compatible with build_correction_dataframe():
         - includes 'tax_code_1'
         - includes 'suggested_tax_code_1' / 'suggested_tax_code_2'
+        - includes 'new_tax_code'
         - includes 'match_status', 'action', 'correction_reason'
     
     """
@@ -338,5 +340,13 @@ def run_age_taxcode_analysis(
     # 7) Suggested codes for correction file builder
     df["suggested_tax_code_1"] = df["expected_tax_code_1"]
     df["suggested_tax_code_2"] = df["expected_tax_code_2"]
+
+    # Compose combined new tax code (e.g., 7, B2) from suggested codes.
+    s1 = df["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)
+    s2 = df["suggested_tax_code_2"].astype("string").str.strip().str.upper().replace("", pd.NA)
+    df["new_tax_code"] = pd.NA
+    df.loc[s1.notna() & s2.isna(), "new_tax_code"] = s1
+    df.loc[s1.notna() & s2.notna(), "new_tax_code"] = (s1 + s2)
+    df["new_tax_code"] = df["new_tax_code"].astype("string")
 
     return df
