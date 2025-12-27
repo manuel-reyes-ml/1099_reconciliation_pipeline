@@ -29,6 +29,7 @@ Design goals
   `build_correction_file.build_correction_dataframe()` by including:
     - match_status
     - suggested_tax_code_1 / suggested_tax_code_2 (when correction needed)
+    - new_tax_code (combined suggested code)
     - action and correction_reason (recommended)
 
 Inputs
@@ -84,6 +85,7 @@ The returned DataFrame typically includes:
 - IDs: transaction_id (Matrix), trans_id_relius (Relius)
 - Current codes: tax_code_1, tax_code_2 (Matrix)
 - Suggested codes: suggested_tax_code_1, suggested_tax_code_2 (if applicable)
+- Combined suggested code: new_tax_code
 - Status fields: match_status, correction_reason, action
 - Optional review fields: participant_name, dist_category_relius, matrix_account
 
@@ -394,5 +396,13 @@ def reconcile_relius_matrix(
         within_range & merged["needs_correction"],
         "match_status",
     ] = "match_needs_correction"
+
+    # Compose combined new tax code (e.g., 4G) from suggested codes.
+    s1 = merged["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)
+    s2 = merged["suggested_tax_code_2"].astype("string").str.strip().str.upper().replace("", pd.NA)
+    merged["new_tax_code"] = pd.NA
+    merged.loc[s1.notna() & s2.isna(), "new_tax_code"] = s1
+    merged.loc[s1.notna() & s2.notna(), "new_tax_code"] = (s1 + s2)
+    merged["new_tax_code"] = merged["new_tax_code"].astype("string")
 
     return merged
