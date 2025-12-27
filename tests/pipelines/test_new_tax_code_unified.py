@@ -133,3 +133,43 @@ def test_build_correction_dataframe_exports_new_tax_code() -> None:
     assert "New Tax Code" in corrections_df.columns
     assert "New Tax Code 1" not in corrections_df.columns
     assert corrections_df.loc[0, "New Tax Code"] == "1"
+
+
+def test_build_correction_dataframe_exports_combined_new_tax_code() -> None:
+    matrix_df = pd.DataFrame(
+        {
+            "plan_id": ["300005A"],
+            "ssn": ["123456780"],
+            "txn_date": [pd.Timestamp("2025-03-01")],
+            "transaction_id": ["tx5"],
+            "participant_name": ["Roth"],
+            "matrix_account": ["acct5"],
+            "gross_amt": [150.0],
+            "fed_taxable_amt": [50.0],
+            "roth_initial_contribution_year": [2015],
+            "tax_code_1": ["7"],
+            "tax_code_2": [""],
+        }
+    )
+    relius_demo_df = pd.DataFrame(
+        {
+            "plan_id": ["300005A"],
+            "ssn": ["123456780"],
+            "dob": [pd.Timestamp("1978-01-01")],
+            "term_date": [pd.NaT],
+        }
+    )
+    relius_roth_basis_df = pd.DataFrame(
+        {
+            "plan_id": ["300005A"],
+            "ssn": ["123456780"],
+            "first_roth_tax_year": [2010],
+            "roth_basis_amt": [500.0],
+        }
+    )
+
+    result = run_roth_taxable_analysis(matrix_df, relius_demo_df, relius_roth_basis_df)
+    corrections_df = build_correction_dataframe(result)
+
+    assert result.loc[0, "new_tax_code"] == "B1"
+    assert corrections_df.loc[0, "New Tax Code"] == "B1"
