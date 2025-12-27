@@ -50,6 +50,8 @@ Optional but recommended:
     Current Matrix tax codes for comparison and auditability.
 - suggested_tax_code_2:
     Proposed Tax Code 2 (used for Roth or multi-code scenarios).
+- new_tax_code:
+    Combined suggested tax code (e.g., 4G, B7) for export.
 - action:
     e.g., "UPDATE_1099"
 - correction_reason:
@@ -131,6 +133,7 @@ def build_correction_dataframe(
         - matrix_account
         - tax_code_1, tax_code_2
         - suggested_tax_code_1, suggested_tax_code_2
+        - new_tax_code
         - correction_reason
     
     We select rows that:
@@ -195,9 +198,7 @@ def build_correction_dataframe(
         "Matrix Account",
         "Current Tax Code 1",
         "Current Tax Code 2",
-        "New Tax Code 1",
-        "New Tax Code 2",
-        "New Tax Code 1+2",
+        "New Tax Code",
         "New Taxable Amount",
         "New First Year contrib",
         "Reason",
@@ -225,6 +226,16 @@ def build_correction_dataframe(
     if "suggested_first_roth_tax_year" not in df_corr.columns:
         df_corr["suggested_first_roth_tax_year"] = pd.NA
 
+    if "new_tax_code" not in df_corr.columns:
+        s1 = df_corr.get("suggested_tax_code_1", pd.Series(pd.NA, index=df_corr.index))
+        s2 = df_corr.get("suggested_tax_code_2", pd.Series(pd.NA, index=df_corr.index))
+        s1 = s1.astype("string").str.strip().str.upper().replace("", pd.NA)
+        s2 = s2.astype("string").str.strip().str.upper().replace("", pd.NA)
+        df_corr["new_tax_code"] = pd.NA
+        df_corr.loc[s1.notna() & s2.isna(), "new_tax_code"] = s1
+        df_corr.loc[s1.notna() & s2.notna(), "new_tax_code"] = (s1 + s2)
+        df_corr["new_tax_code"] = df_corr["new_tax_code"].astype("string")
+
     # 6) Rename columns to the Matrix correction template name
     # rename_map is a dictionary mapping internal column names -> output column names
     rename_map = {                                              
@@ -235,8 +246,7 @@ def build_correction_dataframe(
         "matrix_account": "Matrix Account",
         "tax_code_1": "Current Tax Code 1",
         "tax_code_2": "Current Tax Code 2",
-        "suggested_tax_code_1": "New Tax Code 1",
-        "suggested_tax_code_2": "New Tax Code 2",
+        "new_tax_code": "New Tax Code",
         "suggested_taxable_amt": "New Taxable Amount",
         "suggested_first_roth_tax_year": "New First Year contrib",
         "correction_reason": "Reason",
@@ -247,9 +257,6 @@ def build_correction_dataframe(
                                                                        #    in df_corr["transaction_id"].
 
     
-    # 7) Add column to join tax codes (code 1 + code 2)
-    out["New Tax Code 1+2"] = (out["New Tax Code 1"] + out["New Tax Code 2"]).astype(str).str.strip().fillna("")
-
     # 7) Keep only the columns we want, in the desired order
     out = out[out_cols]
 
