@@ -439,6 +439,9 @@ Matching is case-insensitive after trimming whitespace.
 - Rows already coded as `H` or `B + 4` are treated as tax-code locked and skip
   age-based expectations.
 
+**Death code normalization:**
+- `4 + (blank)` and `(blank) + 4` are normalized to `B + 4`.
+
 ### 5.7 Engine C outputs
 
 Engine C emits:
