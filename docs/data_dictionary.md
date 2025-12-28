@@ -4,13 +4,15 @@ This document describes the key fields used in the reconciliation process.
 
 It covers:
 
-- **Relius export** (historical transaction data)
+- **Relius distributions** (transaction data)
+- **Relius demographics** (DOB/termination)
+- **Relius Roth basis** (first year/basis)
 - **Matrix export** (disbursement / 1099 data)
 - **Derived fields** used during cleaning and matching
 - **Data quality issues** and validation rules
 
-> Note: Column names in synthetic sample files may slightly differ (e.g. snake_case).  
-> This dictionary reflects the conceptual fields used by the pipeline.
+> Note: Column names in synthetic sample files may slightly differ from raw exports.  
+> This dictionary reflects the canonical fields used by the pipeline (`src/config.py`).
 
 ---
 
@@ -21,6 +23,8 @@ It covers:
 - [Field Criticality](#05-field-importance--criticality) – Which fields matter most
 - [Relius Export Fields](#1-relius-export--transaction-data) – Historical transaction data
 - [Matrix Export Fields](#2-matrix-export--disbursement--1099-data) – Disbursement/1099 data
+- [Relius Demo Fields](#25-relius-demo-export--participant-data) – DOB/term data
+- [Relius Roth Basis Fields](#26-relius-roth-basis-export) – Roth basis data
 - [Derived Fields](#3-derived--cleaned-fields) – Calculated during pipeline
 - [Data Quality Issues](#35-common-data-quality-issues) – Common problems and solutions
 - [Validation Rules](#36-field-validation-rules) – Automated checks
@@ -33,11 +37,11 @@ It covers:
 
 For quick orientation, these are the most important fields:
 
-1. **SSN** – Primary matching key, must be valid 9-digit format
-2. **Gross_Amt** – Core reconciliation field, ±$1 tolerance
-3. **Code_1099R** – Determines tax treatment, must match exactly
-4. **Distribution_Date / Payment_Date** – Timing, ±3 day tolerance
-5. **Taxable_Amt** – Affects participant taxes, must be accurate
+1. **plan_id** – Primary plan identifier used in matching
+2. **ssn** – Primary participant key, must be valid 9-digit format
+3. **gross_amt** – Core reconciliation field used in matching
+4. **exported_date / txn_date** – Timing window for Engine A matching
+5. **tax_code_1 / tax_code_2** – Determines tax treatment and corrections
 
 **Color coding in this document:**
 - 🔴 **Critical** – Errors cause incorrect 1099-R
@@ -51,60 +55,48 @@ For quick orientation, these are the most important fields:
 ### High-Level Data Model
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    RELIUS EXPORT                            │
-│  (Historical Transactions - Source of Truth)                │
-├─────────────────────────────────────────────────────────────┤
-│ • Participant_ID      • Gross_Amt                           │
-│ • SSN                 • Taxable_Amt                         │
-│ • Plan_ID             • Fed_Withhold                        │
-│ • Trans_Type          • Distribution_Date                   │
-│ • Code_1099R          • Tax_Year                            │
+│                 RELIUS DISTRIBUTIONS                        │
+│  (plan_id, ssn, gross_amt, exported_date, dist_code_1)       │
 └────────────────────┬────────────────────────────────────────┘
                      │
-                     │  MATCH ON:
-                     │  • SSN (cleaned to 9 digits)
-                     │  • Gross_Amt (±$1.00 tolerance)
-                     │  • Date (±3 days tolerance)
+┌────────────────────▼────────────────────────────────────────┐
+│                      MATRIX EXPORT                          │
+│  (plan_id, ssn, gross_amt, txn_date, tax_code_1/2, fed_taxable_amt) │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     │  Engine A match keys:
+                     │  • plan_id + ssn + gross_amt
+                     │  • date lag window via MATCHING_CONFIG
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 MATCHED RECORDS                             │
-│  (Reconciled Data with Classification)                      │
-├─────────────────────────────────────────────────────────────┤
-│ • match_status      • mismatch_type                         │
-│ • action            • priority                              │
-│ • Both Relius & Matrix fields preserved                     │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    MATRIX EXPORT                            │
-│  (Disbursements - 1099-R Reporting)                         │
-├─────────────────────────────────────────────────────────────┤
-│ • SSN                 • Gross_Amt                           │
-│ • Check_Num           • Taxable_Amt                         │
-│ • Code_1099R          • Fed_Withhold                        │
-│ • Payment_Date        • Tax_Year                            │
+│                 MATCHED OUTPUT (ENGINE A)                   │
+│  (match_status, suggested_tax_code_*, action, reason)        │
 └─────────────────────────────────────────────────────────────┘
+
+Additional inputs for Engines B/C:
+┌──────────────────────────┐   ┌─────────────────────────────┐
+│ RELIUS DEMO (DOB/term)   │   │ RELIUS ROTH BASIS            │
+└──────────────────────────┘   └─────────────────────────────┘
 ```
 
 ### Field Relationships
 
-**Primary Keys:**
-- `SSN` (cleaned to 9 digits) – Universal participant identifier
-- `Gross_Amt` (normalized to cents) – Transaction amount
-- `Distribution_Date` / `Payment_Date` (standardized) – Timing
+**Primary Keys (Engine A):**
+- `plan_id` – Plan identifier (normalized)
+- `ssn` – Participant identifier (cleaned to 9 digits)
+- `gross_amt` – Transaction amount
+- `exported_date` / `txn_date` – Timing window
 
 **Critical for Matching:**
-- SSN must be valid and consistent across systems
-- Amount tolerance: ±$1.00 (handles rounding differences)
-- Date tolerance: ±3 days (handles processing delays)
+- plan_id + ssn + gross_amt must align across systems
+- Date lag window enforced via `MATCHING_CONFIG.max_date_lag_days`
 
 **Critical for 1099 Accuracy:**
-- `Gross_Amt` – IRS reporting requirement
-- `Taxable_Amt` – Determines tax liability
-- `Code_1099R` – Determines tax treatment (early penalty, normal, rollover)
-- `Fed_Withhold` – Withholding reporting to IRS
+- `gross_amt` – IRS reporting requirement
+- `fed_taxable_amt` – Taxable amount in Matrix
+- `tax_code_1` / `tax_code_2` – Determines tax treatment
+- `first_roth_tax_year` / `roth_initial_contribution_year` – Roth qualification inputs
 
 ---
 
@@ -114,17 +106,18 @@ Understanding which fields have the highest impact on reconciliation:
 
 | Field | System | Criticality | Impact if Wrong | Used For |
 |-------|--------|-------------|-----------------|----------|
-| **SSN** | Both | 🔴 CRITICAL | Wrong person receives 1099-R | Primary matching key |
-| **Gross_Amt** | Both | 🔴 CRITICAL | Incorrect tax liability reported | Amount matching, IRS reporting |
-| **Code_1099R** | Both | 🔴 CRITICAL | Wrong tax treatment (penalty vs normal) | Tax classification |
-| **Taxable_Amt** | Both | 🟡 HIGH | Participant overpays/underpays taxes | Tax calculation base |
-| **Fed_Withhold** | Both | 🟡 HIGH | Withholding credit errors | Tax withholding reporting |
-| **Distribution_Date** | Relius | 🟡 MEDIUM | Timing mismatch in records | Date matching |
-| **Payment_Date** | Matrix | 🟡 MEDIUM | Payment timing variance | Date matching |
-| **State_Withhold** | Both | 🟢 LOW | State reporting error only | State tax compliance |
-| **Check_Num** | Both | 🟢 REFERENCE | N/A - for investigation only | Tracing/auditing |
-| **Plan_ID** | Relius | 🟡 MEDIUM | Incorrect grouping/reporting | Plan-level analysis |
-| **Participant_ID** | Both | 🟢 REFERENCE | No direct 1099 impact | Internal tracking |
+| **plan_id** | Both | 🔴 CRITICAL | Wrong plan matching | Primary matching key |
+| **ssn** | Both | 🔴 CRITICAL | Wrong participant match | Primary matching key |
+| **gross_amt** | Both | 🔴 CRITICAL | Incorrect tax reporting | Matching and reconciliation |
+| **tax_code_1** | Matrix | 🔴 CRITICAL | Wrong tax treatment | Tax classification |
+| **tax_code_2** | Matrix | 🟡 HIGH | Secondary code impacts | Roth/inherited logic |
+| **fed_taxable_amt** | Matrix | 🟡 HIGH | Taxable amount errors | Roth taxable checks |
+| **exported_date** | Relius | 🟡 MEDIUM | Timing mismatch | Engine A date lag |
+| **txn_date** | Matrix | 🟡 MEDIUM | Timing mismatch | Engine A date lag |
+| **first_roth_tax_year** | Relius Roth basis | 🟡 HIGH | Roth qualification errors | Engine C start year |
+| **roth_initial_contribution_year** | Matrix | 🟡 HIGH | Roth year mismatch | Engine C corrections |
+| **transaction_id** | Matrix | 🟢 REFERENCE | Investigation and output | Correction file key |
+| **matrix_account** | Matrix | 🟢 REFERENCE | Operations output field | Correction file key |
 
 ### Criticality Definitions
 
@@ -136,36 +129,22 @@ Understanding which fields have the highest impact on reconciliation:
 
 ### Priority in Mismatch Detection
 
-When classifying discrepancies, the pipeline prioritizes based on business impact:
+When classifying discrepancies, the pipeline prioritizes based on engine output:
 
-1. **Amount mismatches** (>$1 difference) → 🔴 **HIGHEST PRIORITY**
-   - Direct IRS reporting error
-   - Affects participant's tax liability
-   - Example: $15,000 vs $15,500 = $500 error on 1099-R
-
-2. **Code mismatches** (wrong tax treatment) → 🔴 **HIGH PRIORITY**
-   - Can trigger incorrect penalties
-   - Example: Code 1 (early, 10% penalty) vs Code 7 (normal, no penalty)
-   - $50,000 distribution = potential $5,000 penalty difference
-
-3. **Withholding mismatches** (>$5 difference) → 🟡 **MEDIUM PRIORITY**
-   - Affects withholding credit on tax return
-   - Usually smaller dollar impact than amount/code errors
-
-4. **Date mismatches** (>3 days) → 🟢 **LOW PRIORITY**
-   - FYI only - minimal impact on 1099-R accuracy
-   - Logged for data quality tracking but rarely requires action
+1. **Engine A corrections** (inherited-plan tax code updates)
+2. **Engine B corrections** (age-based non-Roth tax codes)
+3. **Engine C corrections** (Roth taxable amount and Roth start year updates)
+4. **Review-only items** (INVESTIGATE) and date out-of-range flags
 
 ### Match Tolerance Guidelines
 
 | Field | Tolerance | Rationale |
 |-------|-----------|-----------|
-| SSN | Exact match required | No tolerance - must match exactly |
-| Gross_Amt | ±$1.00 | Handles rounding differences between systems |
-| Date | ±3 days | Allows for posting delays and processing timing |
-| Code_1099R | Exact match required | No tolerance - tax treatment must be identical |
-| Taxable_Amt | ±$1.00 | Same as gross amount tolerance |
-| Withholding | ±$5.00 | Slightly higher tolerance for withholding calculations |
+| plan_id | Exact match required | Primary matching key |
+| ssn | Exact match required | Primary participant key |
+| gross_amt | Exact match required | Matching key in Engine A |
+| exported_date/txn_date | Config-driven lag window | `MATCHING_CONFIG.max_date_lag_days` (default 10) |
+| tax_code_1/2 | Exact match required | Tax treatment must be identical |
 
 ---
 
@@ -174,22 +153,18 @@ When classifying discrepancies, the pipeline prioritizes based on business impac
 **File examples:**  
 `data/sample/relius_sample.xlsx`
 
-| Column Name        | Type        | Example        | Description                                                                 | Notes                          |
-|--------------------|------------|----------------|-----------------------------------------------------------------------------|--------------------------------|
-| `Participant_ID`   | string/int | `123456`       | Internal participant identifier used by Relius                              | May not match Matrix IDs       |
-| `SSN`              | string     | `123-45-6789`  | Participant Social Security Number                                          | Cleaned to 9-digit format      |
-| `Plan_ID`          | string     | `401K-ABC`     | Plan identifier or contract number                                         | Used for plan-level grouping   |
-| `Trans_Type`       | string     | `DIST`, `LOAN` | Transaction type (e.g. distribution, loan, refund)                          | Mapped/normalized in cleaning  |
-| `Gross_Amt`        | float      | `15000.00`     | Gross distribution amount                                                   | 🔴 Used in matching logic         |
-| `Taxable_Amt`      | float      | `15000.00`     | Taxable portion of distribution                                             | May differ from gross          |
-| `Fed_Withhold`     | float      | `1500.00`      | Federal withholding amount                                                  | Included in mismatch checks    |
-| `State_Withhold`   | float      | `300.00`       | State withholding amount (if applicable)                                    | Optional / may be null         |
-| `Distribution_Date`| date/str   | `2024-01-15`   | Date the distribution was posted in Relius                                  | 🔴 Normalized to standard format  |
-| `Tax_Year`         | int        | `2024`         | Tax year derived from distribution date                                     | Possibly explicit column       |
-| `Code_1099R`       | string     | `7`, `1`, `G`  | Relius's version of distribution code, when available                      | 🔴 Used in code mismatch checks   |
-| `Check_Num`        | string     | `0045123`      | Check or payment reference number (if available)                            | 🟢 May help in investigations     |
-| `Source_System`    | string     | `Relius`       | Constant identifier for data source                                         | Helpful when concatenating     |
-| `Last_Updated`     | date/str   | `2024-02-01`   | Timestamp of last update in Relius                                          | Optional, not always present   |
+| Column Name     | Type      | Example      | Description                                                  | Notes |
+|----------------|-----------|--------------|--------------------------------------------------------------|-------|
+| `plan_id`      | string    | `300004PLAT` | Plan identifier (normalized)                                 | 🔴 Matching key |
+| `ssn`          | string    | `123456789`  | Participant SSN                                              | 🔴 Matching key |
+| `first_name`   | string    | `Ava`        | Participant first name                                       | Used for full_name |
+| `last_name`    | string    | `Nguyen`     | Participant last name                                        | Used for full_name |
+| `state`        | string    | `CA`         | Participant state                                            | Optional |
+| `gross_amt`    | float     | `15000.00`   | Gross distribution amount                                    | 🔴 Matching key |
+| `exported_date`| date      | `2024-01-15` | Relius export date                                           | Used for date lag |
+| `tax_year`     | int       | `2024`       | Tax year                                                     | Optional |
+| `dist_code_1`  | string    | `7`          | Relius distribution code (when present)                      | Validation only |
+| `dist_name`    | string    | `Rollover`   | Distribution description                                     | Used for dist_category_relius |
 
 ---
 
@@ -198,21 +173,53 @@ When classifying discrepancies, the pipeline prioritizes based on business impac
 **File examples:**  
 `data/sample/matrix_sample.xlsx`
 
-| Column Name     | Type        | Example        | Description                                                                 | Notes                          |
-|-----------------|------------|----------------|-----------------------------------------------------------------------------|--------------------------------|
-| `SSN`           | string     | `123456789`    | Participant Social Security Number                                          | 🔴 Cleaned to 9-digit format      |
-| `Participant_ID`| string/int | `123456`       | Participant identifier in Matrix (may or may not match Relius)             | Sometimes absent               |
-| `Check_Num`     | string     | `0045123`      | Check number / payment reference                                            | 🟢 May align with Relius          |
-| `Gross_Amt`     | float      | `15000.00`     | Gross disbursement amount                                                   | 🔴 Used in matching logic         |
-| `Taxable_Amt`   | float      | `15000.00`     | Taxable portion of disbursement                                             | Used in discrepancy analysis   |
-| `Fed_Withhold`  | float      | `1500.00`      | Federal withholding reported to IRS                                         | 🟡 Sensitive for 1099-R accuracy  |
-| `State_Withhold`| float      | `300.00`       | State withholding reported                                                  | Optional / may be null         |
-| `Code_1099R`    | string     | `7`, `1`, `G`  | Official 1099-R distribution code as reported to IRS                        | 🔴 Critical for 1099 correctness  |
-| `Payment_Date`  | date/str   | `2024-01-17`   | Date the payment was made (check issued/ACH sent)                           | Slightly later than Relius date|
-| `Tax_Year`      | int        | `2024`         | Tax year associated with the 1099-R                                         | Used in matching & reporting   |
-| `Custodian_ID`  | string     | `MATRIX01`     | Identifier for Matrix / custodian system                                    | Optional                       |
-| `Source_System` | string     | `Matrix`       | Constant identifier for data source                                         | Helpful when concatenating     |
-| `Last_Updated`  | date/str   | `2024-02-03`   | Timestamp of last update in Matrix                                          | Optional                       |
+| Column Name                     | Type   | Example      | Description                                            | Notes |
+|---------------------------------|--------|--------------|--------------------------------------------------------|-------|
+| `matrix_account`                | string | `07B00442`   | Matrix account identifier                              | Output key |
+| `plan_id`                       | string | `300004PLAT` | Plan identifier                                        | 🔴 Matching key |
+| `ssn`                           | string | `123456789`  | Participant SSN                                        | 🔴 Matching key |
+| `participant_name`              | string | `Ava Nguyen` | Participant display name                               | Optional |
+| `state`                         | string | `CA`         | Participant state                                      | Optional |
+| `gross_amt`                     | float  | `15000.00`   | Gross disbursement amount                              | 🔴 Matching key |
+| `fed_taxable_amt`               | float  | `15000.00`   | Taxable amount reported in Matrix                      | Engine C input |
+| `txn_date`                      | date   | `2024-01-17` | Matrix transaction date                                | Date lag |
+| `txn_method`                    | string | `ACH`        | Transaction method/type                                | Optional |
+| `tax_code_1`                    | string | `7`          | Primary 1099-R tax code                                | 🔴 Correction logic |
+| `tax_code_2`                    | string | `G`          | Secondary 1099-R tax code                              | Engine A/C |
+| `tax_form`                      | string | `1099-R`     | Tax form identifier                                    | Optional |
+| `dist_type`                     | string | `Rollover`   | Distribution type                                      | Optional |
+| `roth_initial_contribution_year` | int   | `2016`       | Roth start year (Matrix)                               | Engine C |
+| `transaction_id`                | string | `44324568`   | Matrix transaction ID                                  | Output key |
+
+---
+
+## 2.5 Relius Demo Export – Participant Data
+
+**File examples:**  
+`data/sample/relius_demo_sample.xlsx`
+
+| Column Name | Type | Example | Description | Notes |
+|-------------|------|---------|-------------|-------|
+| `plan_id`   | string | `300004PLAT` | Plan identifier | Join key |
+| `ssn`       | string | `123456789` | Participant SSN | Join key |
+| `dob`       | date   | `1970-05-10` | Date of birth | Engine B/C |
+| `term_date` | date   | `2020-12-31` | Termination date | Engine B/C |
+| `first_name`| string | `Ava` | Participant first name | Optional |
+| `last_name` | string | `Nguyen` | Participant last name | Optional |
+
+---
+
+## 2.6 Relius Roth Basis Export
+
+**File examples:**  
+`data/sample/relius_roth_basis_sample.xlsx`
+
+| Column Name | Type | Example | Description | Notes |
+|-------------|------|---------|-------------|-------|
+| `plan_id` | string | `300005ABC` | Plan identifier | Join key |
+| `ssn` | string | `123456789` | Participant SSN | Join key |
+| `first_roth_tax_year` | int | `2016` | First Roth tax year | Engine C |
+| `roth_basis_amt` | float | `12000.00` | Roth basis amount | Engine C |
 
 ---
 
@@ -222,63 +229,54 @@ During the cleaning and matching steps, several **derived fields** are created. 
 
 ### 3.1 SSN-Related Fields
 
-| Field Name     | Type   | Example      | Description                                    |
-|----------------|--------|--------------|------------------------------------------------|
-| `ssn_clean`    | string | `123456789`  | SSN stripped of non-digits, zero-padded to 9   |
-| `ssn_valid`    | bool   | `True`       | Indicates if SSN passes basic length/format checks |
-| `ssn_hashed`   | string | `a94a8f...`  | (Optional) Hashed SSN for anonymized analysis  |
+| Field Name   | Type | Example | Description |
+|--------------|------|---------|-------------|
+| `ssn`        | string | `123456789` | Normalized SSN (non-digits stripped, zero-padded) |
+| `ssn_valid`  | bool | `True` | Validation flag from `validate_ssn_series` |
 
-> In the public repo, synthetic data may omit real SSNs and use pseudo-values.
+> In the public repo, synthetic data uses non-real SSNs.
 
 ---
 
 ### 3.2 Date-Related Fields
 
-| Field Name      | Type | Example      | Description                                          |
-|-----------------|------|--------------|------------------------------------------------------|
-| `dist_date_std` | date | `2024-01-15` | Standardized distribution date from Relius          |
-| `pay_date_std`  | date | `2024-01-17` | Standardized payment date from Matrix               |
-| `tax_year`      | int  | `2024`       | Extracted or validated tax year                     |
-| `date_diff`     | int  | `2`          | Difference in days between distribution and payment |
+| Field Name | Type | Example | Description |
+|------------|------|---------|-------------|
+| `exported_date` | date | `2024-01-15` | Relius export date (Engine A) |
+| `txn_date` | date | `2024-01-17` | Matrix transaction date |
+| `date_lag_days` | int | `2` | `txn_date - exported_date` |
+| `date_within_tolerance` | bool | `True` | Lag within `MATCHING_CONFIG.max_date_lag_days` |
 
 ---
 
 ### 3.3 Amount-Related Fields
 
-| Field Name       | Type  | Example | Description                                                   |
-|------------------|-------|---------|---------------------------------------------------------------|
-| `gross_cents`    | int   | `1500000` | Gross amount converted to integer cents (`gross * 100`)     |
-| `taxable_cents`  | int   | `1500000` | Taxable amount in cents                                      |
-| `fed_wh_cents`   | int   | `150000`  | Federal withholding in cents                                 |
-| `state_wh_cents` | int   | `30000`   | State withholding in cents                                   |
-| `amount_diff`    | float | `0.50`    | Difference between Relius and Matrix gross amounts           |
-
-**Why cents?** Using cents as integers helps avoid floating point precision issues when comparing amounts.
-
-**Example:**
-```python
-# Floating point comparison (unreliable)
-15000.00 == 15000.05  # False (good)
-15000.00 == 15000.004  # May be True or False (bad!)
-
-# Integer cents comparison (reliable)
-1500000 == 1500005  # False (correct)
-1500000 == 1500000  # True (correct)
-```
+| Field Name | Type | Example | Description |
+|------------|------|---------|-------------|
+| `gross_amt` | float | `15000.00` | Gross distribution amount |
+| `fed_taxable_amt` | float | `15000.00` | Matrix taxable amount |
+| `roth_basis_amt` | float | `12000.00` | Roth basis amount from Relius |
+| `suggested_taxable_amt` | float | `0.00` | Engine C suggested taxable amount |
 
 ---
 
 ### 3.4 Matching & Classification Fields
 
-After joining Relius and Matrix records, the pipeline introduces fields to describe match status and discrepancy types.
+After running Engine A/B/C, the pipeline introduces fields to describe match status and corrections.
 
-| Field Name       | Type   | Example                 | Description                                                    |
-|------------------|--------|-------------------------|----------------------------------------------------------------|
-| `match_key`      | string | `123456789_1500000_2024`| Composite key (ssn + amount + year) used for matching    |
-| `match_status`   | string | `perfect`, `mismatch`, `unmatched_relius`, `unmatched_matrix` | High-level match category |
-| `mismatch_type`  | string | `amount`, `code`, `date`, `withholding`, `multi` | Primary discrepancy driver |
-| `action`         | string | `UPDATE_1099`, `VOID_AND_REISSUE`, `INVESTIGATE`           | Suggested operational action                                  |
-| `priority`       | string | `HIGH`, `MEDIUM`, `LOW` | Business priority of the discrepancy                         |
+| Field Name | Type | Example | Description |
+|------------|------|---------|-------------|
+| `match_status` | string | `match_needs_correction` | Engine status label |
+| `dist_category_relius` | string | `rollover` | Relius distribution category |
+| `full_name` | string | `Ava Nguyen` | Derived from Relius first/last name |
+| `expected_tax_code_1` | string | `4` | Expected primary tax code |
+| `expected_tax_code_2` | string | `G` | Expected secondary tax code |
+| `suggested_tax_code_1` | string | `4` | Suggested primary tax code |
+| `suggested_tax_code_2` | string | `G` | Suggested secondary tax code |
+| `new_tax_code` | string | `4G` | Combined suggested tax code |
+| `suggested_first_roth_tax_year` | int | `2016` | Engine C suggested Roth start year |
+| `action` | string | `UPDATE_1099` | Recommended action |
+| `correction_reason` | string | `- roth_initial_year_mismatch` | Audit-friendly reason token(s) |
 
 ---
 
@@ -287,159 +285,25 @@ After joining Relius and Matrix records, the pipeline introduces fields to descr
 Real-world data challenges encountered and how the pipeline handles them:
 
 ### SSN Issues
-
-| Issue | Example | How Pipeline Handles | Prevention |
-|-------|---------|---------------------|------------|
-| **Format variations** | `123-45-6789` vs `123456789` vs `123 45 6789` | Strip all non-digits using regex | Normalization in cleaning step |
-| **Leading zeros missing** | `12345678` (should be `012345678`) | Zero-pad to 9 digits with `zfill(9)` | Validation + padding |
-| **Invalid SSNs** | `000-00-0000`, `999-99-9999`, `123-45-67890` | Flag as invalid, log warning, exclude from matching | Validation rules |
-| **Partial masking** | `***-**-6789` (last 4 only) | Cannot match - requires full SSN | Operations must provide full data |
-| **Null/missing** | `NaN`, `null`, empty string | Flag record, cannot participate in matching | Require SSN for reconciliation |
-
-**Code example:**
-```python
-def clean_ssn(ssn):
-    """Clean and validate SSN"""
-    # Remove all non-digits
-    clean = re.sub(r'\D', '', str(ssn))
-    # Pad to 9 digits
-    clean = clean.zfill(9)
-    # Validate
-    if len(clean) != 9 or clean in ['000000000', '999999999']:
-        return None
-    return clean
-```
-
-**Handling in pipeline:**
-- **5-8% of records** typically have SSN format issues
-- **Automatic fix rate:** ~95% (format standardization)
-- **Manual review required:** ~5% (invalid/partial SSNs)
-
----
+- **Format variations** (hyphens, spaces) are normalized to 9 digits.
+- **Invalid SSNs** are flagged via `ssn_valid` and surfaced in `validation_issues`.
 
 ### Amount Issues
-
-| Issue | Example | How Pipeline Handles | Prevention |
-|-------|---------|---------------------|------------|
-| **Rounding differences** | `15000.00` vs `15000.05` | ±$1.00 tolerance in matching | Tolerance parameter configurable |
-| **Negative amounts** | `-5000.00` (correction/reversal) | Handle as valid, flag for review | Sign preservation, negative flag |
-| **Currency symbols** | `$15,000.00`, `USD 15000` | Strip non-numeric chars with regex | Cleaning regex |
-| **Comma separators** | `15,000.00` | Remove commas before conversion | String cleaning |
-| **Cents precision** | Float rounding errors (0.1 + 0.2 ≠ 0.3) | Convert to integer cents (`amount * 100`) | Integer arithmetic |
-| **Scientific notation** | `1.5e4` (rare) | Parse as float first | Robust parsing |
-
-**Code example:**
-```python
-def normalize_amount(amount):
-    """Convert amount to integer cents"""
-    # Remove currency symbols and commas
-    clean = re.sub(r'[$,USD\s]', '', str(amount))
-    # Convert to float, then to cents
-    try:
-        return int(float(clean) * 100)
-    except ValueError:
-        return None
-```
-
-**Handling in pipeline:**
-- **2-3% of records** have amount format issues
-- **Rounding tolerance:** ±$1.00 catches ~98% of legitimate matches
-- **Large differences (>$100)** automatically flagged as high priority
-
----
+- Amounts are coerced to numeric with `to_numeric_series`.
+- `amount_valid` flags missing or illogical values (e.g., taxable > gross).
 
 ### Date Issues
+- Dates are coerced with `to_date_series` and validated with `validate_dates_series`.
+- Invalid or out-of-range dates are flagged for review.
 
-| Issue | Example | How Pipeline Handles | Prevention |
-|-------|---------|---------------------|------------|
-| **Format variations** | `01/15/2024`, `2024-01-15`, `Jan 15, 2024`, `15-Jan-2024` | Parse multiple formats sequentially | Standardize to YYYY-MM-DD |
-| **Invalid dates** | `2024-02-30`, `13/01/2024`, `2024-00-01` | Try parsing, log error if fail, return None | Validation checks |
-| **Missing dates** | `NaT`, `null`, empty string | Flag record, cannot match on date | Require date for reconciliation |
-| **Time component** | `2024-01-15 14:30:00`, `2024-01-15T14:30:00Z` | Strip time, keep date only | Date extraction |
-| **Excel date numbers** | `45321` (Excel serial date) | Convert from Excel serial to date | Excel date parsing |
-| **Text dates** | `January fifteenth, 2024` | Not supported - log error | Standardize at source |
-
-**Code example:**
-```python
-def standardize_date(date_str):
-    """Parse and standardize date to YYYY-MM-DD"""
-    # Handle Excel serial dates
-    if isinstance(date_str, (int, float)):
-        return pd.to_datetime(date_str, unit='D', origin='1899-12-30').strftime('%Y-%m-%d')
-    
-    formats = ['%Y-%m-%d', '%m/%d/%Y', '%d/%m/%Y', '%b %d, %Y', '%d-%b-%Y']
-    for fmt in formats:
-        try:
-            return pd.to_datetime(date_str, format=fmt).strftime('%Y-%m-%d')
-        except:
-            continue
-    return None
-```
-
-**Handling in pipeline:**
-- **1-2% of records** have date format issues
-- **Date tolerance:** ±3 days catches processing delays
-- **Failed parsing:** Logged for manual review
-
----
-
-### Code_1099R Issues
-
-| Issue | Example | How Pipeline Handles | Prevention |
-|-------|---------|---------------------|------------|
-| **Format variations** | `7`, `07`, `Code 7`, `Code-7` | Strip non-digits, standardize to single char | Normalization |
-| **Invalid codes** | `99`, `X`, `0` | Flag as invalid, log warning | Validation against IRS codes |
-| **Missing codes** | `null`, empty, `N/A` | Cannot validate, flag for review | Require code for distributions |
-| **Multiple codes** | `1,7` (rare edge case) | Use first code, log warning | Data quality at source |
-| **Text descriptions** | `Early Distribution` instead of `1` | Not supported - requires code | Standardize at source |
-
-**Valid 1099-R codes (IRS):**
-- `1` – Early distribution (age <59½, usually 10% penalty)
-- `2` – Early distribution, exception applies (no penalty)
-- `4` – Death benefit
-- `7` – Normal distribution (age 59½+, no penalty)
-- `8` – Excess contributions corrected
-- `G` – Rollover to another qualified plan (not taxable)
-- `L` – Loan treated as distribution
-- `P` – Excess contributions plus earnings
-- `Q` – Qualified distribution from Roth
-
-**Handling in pipeline:**
-- **<1% of records** have invalid codes
-- **Missing codes:** Cannot validate 1099 accuracy - flagged HIGH priority
-- **Code mismatches:** Always flagged for review (no tolerance)
-
----
+### Tax Code Issues
+- Tax codes are normalized to 1-2 characters with `normalize_tax_code_series`.
+- Invalid codes are flagged via `code_1099r_valid`.
+- Valid codes include `1`, `2`, `4`, `7`, `8`, `B`, `G`, `H`, `L`, `P`, `Q`.
 
 ### Duplicate Issues
-
-| Issue | Example | How Pipeline Handles | Prevention |
-|-------|---------|---------------------|------------|
-| **Exact duplicates** | Same SSN, amount, date appears 2x in one system | Deduplicate, keep first occurrence | Flag in data quality report |
-| **Partial duplicates** | Same SSN, similar amount, same day | Keep both, flag for manual review | Requires investigation |
-| **Cross-system duplicates** | Same record in both Relius AND Matrix | Expected - this is a MATCH (good!) | Normal reconciliation behavior |
-| **Reversal pairs** | Original + reversal (positive + negative) | Keep both, note in comments | Track corrections separately |
-
-**Handling in pipeline:**
-- **<0.5% of records** are true duplicates
-- **Deduplication:** Based on SSN + amount + date + system
-- **Flagged for review:** All duplicate scenarios logged
-
----
-
-### Impact Summary
-
-**Data quality issues found in typical reconciliation run:**
-
-| Issue Type | Frequency | Auto-Fixed | Manual Review | Example Count (10K records) |
-|-----------|-----------|------------|---------------|---------------------------|
-| SSN format | 5-8% | 95% | 5% | 500-800 records, 25-40 need review |
-| Amount rounding | 2-3% | 98% | 2% | 200-300 records, 4-6 need review |
-| Date format | 1-2% | 90% | 10% | 100-200 records, 10-20 need review |
-| Invalid 1099-R codes | <1% | 0% | 100% | 10-50 records, all need review |
-| Duplicates | <0.5% | 80% | 20% | 10-50 records, 2-10 need review |
-
-**Overall:** Pipeline handles **95%+ of issues automatically**. Remaining **~5% flagged for manual review** in correction file.
+- Each cleaned dataset is deduplicated using configured match keys.
+- Duplicate handling is conservative and logged for review in notebooks.
 
 ---
 
@@ -475,8 +339,6 @@ def validate_ssn(ssn_clean):
 
 **Result:** `ssn_valid` field set to True/False
 
-**Statistics:** ~95% of cleaned SSNs pass validation
-
 ---
 
 ### Amount Validation
@@ -485,33 +347,13 @@ def validate_ssn(ssn_clean):
 ```python
 # Validation rules:
 1. Numeric type (after cleaning)
-2. Gross_Amt >= 0 OR negative_flag = True (for corrections)
-3. Taxable_Amt <= Gross_Amt (logical constraint)
-4. Fed_Withhold <= Gross_Amt (cannot withhold more than gross)
-5. Taxable_Amt >= 0 (negative taxable amount illogical)
-6. Amount not absurdly large (e.g., > $10M per distribution)
+2. gross_amt >= 0 unless explicitly marked as correction
+3. fed_taxable_amt <= gross_amt (logical constraint)
+4. fed_taxable_amt >= 0
+5. gross_amt not absurdly large (e.g., > $10M per distribution)
 ```
 
-**Python implementation:**
-```python
-def validate_amounts(gross, taxable, fed_wh):
-    """Validate amount relationships"""
-    if gross < 0 and not is_correction:  # Corrections can be negative
-        return False
-    if taxable > gross:  # Taxable can't exceed gross
-        return False
-    if fed_wh > gross:  # Withholding can't exceed gross
-        return False
-    if abs(gross) > 10_000_000:  # Sanity check
-        return False
-    return True
-```
-
-**Result:** Invalid amounts flagged for review
-
-**Common issues caught:**
-- Taxable > Gross: ~0.1% of records
-- Withholding > Gross: ~0.05% of records
+**Result:** Invalid amounts flagged for review via `amount_valid`.
 
 ---
 
@@ -522,72 +364,26 @@ def validate_amounts(gross, taxable, fed_wh):
 # Validation rules:
 1. Valid date format (parseable)
 2. Year between 1990-2050 (reasonable range)
-3. Distribution_Date <= Today (cannot distribute future money)
-4. Payment_Date <= Today + 30 days (allow near-future payments)
-5. Payment_Date >= Distribution_Date - 30 days (payment shouldn't precede distribution by much)
-6. Date is not a holiday/weekend for business logic (optional check)
+3. exported_date <= Today (cannot be in the future)
+4. txn_date <= Today + 30 days (allow near-future postings)
+5. txn_date >= exported_date - 30 days (pre-export postings are unusual)
 ```
 
-**Python implementation:**
-```python
-def validate_dates(dist_date, pay_date):
-    """Validate date relationships"""
-    from datetime import datetime, timedelta
-    
-    today = datetime.now().date()
-    
-    # Basic range checks
-    if dist_date.year < 1990 or dist_date.year > 2050:
-        return False
-    if dist_date > today:
-        return False
-    if pay_date > today + timedelta(days=30):
-        return False
-    
-    # Relationship check
-    if pay_date < dist_date - timedelta(days=30):
-        return False  # Payment before distribution unusual
-    
-    return True
-```
-
-**Result:** Invalid dates flagged, cannot participate in matching
-
-**Common issues caught:**
-- Future dates: ~0.5% of records
-- Illogical date sequences: ~0.2% of records
+**Result:** Invalid dates flagged via `date_valid`.
 
 ---
 
-### Code_1099R Validation
+### Tax Code Validation
 
 **Must be:**
 ```python
 # Validation rules:
-1. One of the valid IRS codes: 1, 2, 4, 7, 8, G, L, P, Q
-2. Single character or digit
-3. Not null/empty for distributions (required for 1099-R)
-4. Not invalid legacy codes (some systems have old codes)
+1. One of the valid IRS codes: 1, 2, 4, 7, 8, B, G, H, L, P, Q
+2. 1-2 character alphanumeric (post-normalization)
+3. Not null/empty for distributions
 ```
 
-**Python implementation:**
-```python
-def validate_1099r_code(code):
-    """Validate 1099-R distribution code"""
-    valid_codes = ['1', '2', '4', '7', '8', 'G', 'L', 'P', 'Q']
-    
-    if not code or pd.isna(code):
-        return False
-    
-    code_clean = str(code).strip().upper()
-    
-    if code_clean not in valid_codes:
-        return False
-    
-    return True
-```
-
-**Result:** Invalid codes flagged HIGH priority (cannot validate 1099 accuracy)
+**Result:** Invalid codes flagged via `code_1099r_valid`.
 
 **IRS Code Reference:**
 - `1` = Early distribution, no known exception
@@ -597,7 +393,7 @@ def validate_1099r_code(code):
 - `8` = Excess contributions
 - `B` = Distribution from Roth sources
 - `G` = Rollover from pre-tax distribution (not taxable)
-- `H` = Rollover from Roth distribution (no taxable)
+- `H` = Rollover from Roth distribution (not taxable)
 - `L` = Loan treated as distribution
 - `P` = Excess contributions plus earnings
 - `Q` = Qualified Roth distribution
@@ -609,57 +405,20 @@ def validate_1099r_code(code):
 **Logical consistency checks:**
 ```python
 # Business logic rules:
-1. IF Code_1099R == '1' (early dist) THEN expect participant age < 59.5 (if age available)
-2. IF Code_1099R == 'G' (rollover) THEN expect Taxable_Amt == 0 or near 0
-3. IF Taxable_Amt == 0 THEN Code_1099R should be 'G' or have valid exception
-4. IF Gross_Amt != Taxable_Amt THEN difference should be < 50% (rarely >50% non-taxable)
-5. IF Fed_Withhold > 0 THEN expect Gross_Amt > minimum threshold ($200)
+1. IF tax_code_1 == 'G' THEN fed_taxable_amt should be <= 10% of gross
+2. IF fed_taxable_amt > gross_amt * 1.5 THEN flag as invalid
+3. IF tax_code_1 == '1' AND age >= 59.5 (when provided) THEN flag
 ```
 
-**Python implementation:**
-```python
-def cross_validate(gross, taxable, code, age=None):
-    """Validate logical relationships between fields"""
-    issues = []
-    
-    # Rollover check
-    if code == 'G' and taxable > gross * 0.1:  # Allow 10% tolerance
-        issues.append("Rollover (Code G) should have minimal taxable amount")
-    
-    # Taxable exceeds gross by large margin
-    if taxable > gross * 1.5:
-        issues.append("Taxable amount significantly exceeds gross")
-    
-    # Early distribution with age check
-    if code == '1' and age and age >= 59.5:
-        issues.append("Code 1 (early dist) but participant age >= 59.5")
-    
-    return issues
-```
-
-**Result:** Flags illogical combinations for manual investigation
-
-**Common illogical patterns:**
-- Code G (rollover) with taxable amount: ~0.3% of records
-- Large taxable/gross ratio: ~0.1% of records
+**Result:** Flags illogical combinations for manual investigation via `validation_issues`.
 
 ---
 
 ### Validation Summary
 
-**Validation statistics (typical 10K record reconciliation):**
-
-| Validation Type | Pass Rate | Common Failures | Impact |
-|----------------|-----------|-----------------|--------|
-| **SSN** | 95% | Format issues, invalid area codes | Cannot match without valid SSN |
-| **Amount** | 98% | Taxable > Gross, negative amounts | Flags for review |
-| **Date** | 97% | Future dates, invalid formats | Cannot match without valid date |
-| **1099-R Code** | 99% | Invalid codes, missing codes | HIGH priority - affects tax treatment |
-| **Cross-field** | 97% | Illogical relationships | Flags for investigation |
-
-**Overall validation pass rate:** ~95% of records pass all checks
-
-**Records requiring manual review:** ~5% (500 out of 10,000)
+Validation flags are produced during cleaning so downstream engines can decide
+whether to proceed or require review. Invalid rows are not automatically
+dropped unless required by match keys.
 
 ---
 
@@ -669,7 +428,7 @@ Cleaners emit the following columns to surface validation outcomes without
 dropping records:
 
 - `ssn_valid`: boolean flag for SSN validation.
-- `amount_valid`: boolean flag for gross/taxable/withholding checks.
+- `amount_valid`: boolean flag for gross/taxable amount checks.
 - `date_valid`: boolean flag for distribution/payment date logic.
 - `code_1099r_valid`: boolean flag for IRS code validation.
 - `validation_issues`: list of issue tokens for failed validations and
@@ -688,38 +447,31 @@ dropping records:
 
 The final correction Excel file (e.g. `reports/samples/correction_file_sample.xlsx`) includes a curated set of fields designed for the **operations team**.
 
-| Column Name       | Type    | Example         | Description                                              |
-|-------------------|---------|-----------------|----------------------------------------------------------|
-| `SSN`             | string  | `***-**-6789`   | Masked SSN or internal ID (synthetic in public repo)    |
-| `Plan_ID`         | string  | `401K-ABC`      | Plan identifier                                          |
-| `Relius_Amt`      | float   | `15000.00`      | Gross amount from Relius                                |
-| `Matrix_Amt`      | float   | `15050.00`      | Gross amount from Matrix                                |
-| `Diff_Amt`        | float   | `50.00`         | Amount difference (Matrix - Relius)                     |
-| `Relius_Code`     | string  | `7`             | 1099-R code from Relius                                 |
-| `Matrix_Code`     | string  | `1`             | 1099-R code from Matrix                                 |
-| `Relius_Date`     | date    | `2024-01-15`    | Distribution date from Relius                           |
-| `Matrix_Date`     | date    | `2024-01-17`    | Payment date from Matrix                                |
-| `Mismatch_Type`   | string  | `code`          | Primary discrepancy classification                      |
-| `Action`          | string  | `VOID_AND_REISSUE` | Recommended operational action                        |
-| `Priority`        | string  | `HIGH`          | Business priority (HIGH/MEDIUM/LOW)                     |
-| `Notes`           | string  | `Verify 1099-R code with source docs` | Free-text column for operations comments            |
+| Column Name | Type | Example | Description |
+|-------------|------|---------|-------------|
+| `Transaction Id` | string | `44324568` | Matrix transaction identifier |
+| `Transaction Date` | date | `2024-01-17` | Matrix transaction date |
+| `Participant SSN` | string | `123456789` | Normalized SSN |
+| `Participant Name` | string | `Ava Nguyen` | Name used for review |
+| `Matrix Account` | string | `07B00442` | Matrix account identifier |
+| `Current Tax Code 1` | string | `7` | Matrix tax code 1 |
+| `Current Tax Code 2` | string | `G` | Matrix tax code 2 |
+| `New Tax Code` | string | `4G` | Suggested combined tax code |
+| `New Taxable Amount` | float | `0.00` | Suggested taxable amount |
+| `New First Year contrib` | int | `2016` | Suggested Roth start year |
+| `Reason` | string | `- roth_initial_year_mismatch` | Correction reason token(s) |
+| `Action` | string | `UPDATE_1099` | Recommended action |
 
 ### Action Codes
 
 | Action Code | When Used | Operations Response |
 |------------|-----------|-------------------|
-| `UPDATE_1099` | Minor discrepancy, 1099 not yet issued | Update system, correct before mailing |
-| `VOID_AND_REISSUE` | Significant error, 1099 already issued | Void incorrect 1099, issue corrected version |
-| `INVESTIGATE` | Complex issue, requires manual review | Review source documents, determine root cause |
-| `NO_ACTION` | Within tolerance, informational only | No action needed, log for tracking |
+| `UPDATE_1099` | Correction required | Update Matrix values |
+| `INVESTIGATE` | Missing or ambiguous data | Manual review |
 
 ### Priority Levels
 
-| Priority | Criteria | Example | Action Timeline |
-|----------|----------|---------|----------------|
-| `HIGH` | Amount diff >$100 OR code mismatch with penalty impact | $50K with Code 1 vs 7 | Same day review |
-| `MEDIUM` | Amount diff $10-$100 OR withholding mismatch | Withholding $500 vs $450 | Within 3 days |
-| `LOW` | Date mismatch only OR amount diff <$10 | Date differs by 2 days | Weekly review |
+Priority levels are managed by operations based on match_status and action.
 
 ---
 
@@ -731,7 +483,7 @@ In this public repository:
 
 - ✅ **Column structures mirror real exports** - Field names, types, relationships are accurate
 - ✅ **Field types and relationships are accurate** - Data model represents production
-- ✅ **Statistical patterns preserved** - Distributions, frequencies match real data
+- ✅ **Representative patterns** - Synthetic data covers common scenarios
 - ❌ **Values are 100% synthetic** - Generated using Python's Faker library
 - ❌ **SSNs, IDs, plan numbers, amounts are NOT real** - No real participant data
 - ❌ **No real participant data** appears anywhere in this repository
@@ -742,8 +494,8 @@ In this public repository:
 - Any resemblance to real persons, plans, or transactions is purely coincidental
 - **Production implementation** uses secure, encrypted real data in controlled environment
 - **This demo version** allows safe public sharing while preserving methodology
-- All synthetic SSNs generated using invalid area codes (900-999 range)
-- All synthetic amounts are random within realistic ranges ($100 - $100,000)
+- Synthetic SSNs are non-real and used for demonstration only
+- Synthetic amounts are generated within realistic ranges for testing
 
 ### ✅ What This Allows
 
@@ -762,7 +514,7 @@ The synthetic data maintains authenticity by preserving:
 
 - ✅ **Realistic field formats** - SSN patterns, date formats, amount ranges
 - ✅ **Common data quality issues** - Format variations, nulls, duplicates included
-- ✅ **Typical distribution patterns** - Match rates, mismatch types mirror production
+- ✅ **Typical distribution patterns** - Includes common matches and edge cases
 - ✅ **Edge cases** - Negative amounts, rollovers, early distributions represented
 - ✅ **System differences** - Relius vs Matrix timing/format variations
 - ✅ **Reconciliation challenges** - Rounding differences, date mismatches, code issues
@@ -784,13 +536,14 @@ In the real implementation (not in this repo):
 
 ## Appendix: Field Count Summary
 
-| Category | Field Count | Critical Fields | Notes |
-|----------|-------------|-----------------|-------|
-| **Relius Export** | 13 | 5 (SSN, Gross_Amt, Code, Date, Plan_ID) | Historical transactions |
-| **Matrix Export** | 12 | 5 (SSN, Gross_Amt, Code, Date, Tax_Year) | Disbursement/1099 data |
-| **Derived Fields** | 15 | 4 (ssn_clean, gross_cents, match_key, match_status) | Calculated during pipeline |
-| **Correction File** | 13 | 6 (SSN, amounts, codes, priority, action) | Operations deliverable |
-| **Total Unique** | ~30 | ~10 critical for matching | Across all stages |
+| Category | Notes |
+|----------|-------|
+| **Relius Distributions** | Core matching fields plus distribution metadata |
+| **Relius Demo** | DOB and termination dates for age-based rules |
+| **Relius Roth Basis** | Roth start year and basis totals |
+| **Matrix Export** | Transaction identifiers, tax codes, taxable amounts |
+| **Derived Fields** | Match status, suggested codes, actions, reasons |
+| **Correction File** | Matrix-ready output with suggested updates |
 
 ---
 
