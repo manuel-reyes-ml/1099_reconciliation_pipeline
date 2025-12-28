@@ -12,12 +12,16 @@ This package contains the core modules for:
 
 """
 
-#Impot modules to be exposed at the package level
+#Import modules to be exposed at the package level
 __all__ = [
     "config",
     "load_data",
     "clean_relius",
-    "clean__matrix",
-    #"match_transactions",
-    #"build_correction_file",
+    "clean_relius_demo",
+    "clean_relius_roth_basis",
+    "clean_matrix",
+    "match_transactions",
+    "build_correction_file",
+    "age_taxcode_analysis",
+    "roth_taxable_analysis",
 ]
