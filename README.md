@@ -3,11 +3,15 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue)
 ![Pandas](https://img.shields.io/badge/Pandas-2.0+-green)
 ![License](https://img.shields.io/badge/License-MIT-blue)
-![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
+![Status](https://img.shields.io/badge/Status-Portfolio-brightgreen)
 
-Automated data pipeline for **reconciling retirement plan distributions** between Relius (historical transactions) and Matrix (disbursement/1099 data). Identifies discrepancies, generates correction files, and reduces 1099 errors by 95.8%.
+Automated data pipeline for **reconciling retirement plan distributions** between Relius (distribution exports) and Matrix (disbursement/1099 exports). Standardizes inputs, runs three matching/correction engines (A/B/C), and produces Matrix-ready correction recommendations (tax codes, taxable amount, Roth basis year).
 
 > 🛡️ **Privacy First:** All data in this repository is synthetic. Original project built for production with real participant data (SSN, tax codes) - cannot be shared for compliance reasons.
+
+### Recruiter Pitch
+
+I built this project to showcase **both Data Engineering and Data Analytics in a real finance workflow**: ingesting messy Excel exports from Relius and Matrix (plus Relius demographics and Roth basis extracts), normalizing them into a canonical schema, applying auditable business rules across **Engine A (inherited plan matching)**, **Engine B (age-based non-Roth tax codes)**, and **Engine C (Roth taxable + Roth tax-code logic)**, and generating **Matrix-ready 1099-R correction files** for review and execution.
 
 ---
 
@@ -32,16 +36,16 @@ Financial institutions managing retirement plans face a critical challenge: **10
 - ❌ Incorrect 1099 forms mailed to participants
 - ❌ Reissued tax forms (costly and time-consuming)
 - ❌ Compliance risks and audit findings
-- ❌ Extra workload for operations teams (4-8 hours/week manual reconciliation)
+- ❌ Extra workload for operations teams (manual reconciliation)
 - ❌ Frustrated participants and plan sponsors
 
 ### My Solution
 Built an **automated reconciliation pipeline** that:
-- ✅ Processes 10,000+ transactions in under 2 minutes
-- ✅ Achieves 98% match rate with intelligent fuzzy matching
-- ✅ Reduces manual reconciliation time by 95% (8 hours → 20 minutes)
-- ✅ Catches errors before 1099s are mailed
-- ✅ Generates actionable correction files for operations team
+- ✅ Normalizes multiple Excel exports into a canonical schema
+- ✅ Applies deterministic match keys with config-driven tolerances
+- ✅ Runs specialized engines for inherited, age-based, and Roth workflows
+- ✅ Flags corrections and review items before 1099s are mailed
+- ✅ Generates Matrix-ready correction files with suggested updates
 
 ### Personal Context
 While working in retirement plan administration, I witnessed the operational pain of manual Excel-based reconciliation. This project demonstrates how Python automation can solve real business problems and deliver immediate ROI.
@@ -50,20 +54,18 @@ While working in retirement plan administration, I witnessed the operational pai
 
 ## 📸 Project Preview
 
-> **Status:** Production-ready pipeline with synthetic demo data
+> **Status:** Portfolio pipeline with synthetic demo data
 
 ### Sample Output
 ```
-=== 1099 Reconciliation Results ===
+=== 1099 Reconciliation Results (Illustrative) ===
 
 Total Transactions Processed: 10,247
 ✓ Perfect Matches: 9,845 (96.1%)
-⚠ Mismatches: 312 (3.0%)
-❓ Unmatched (Relius): 58 (0.6%)
-❓ Unmatched (Matrix): 32 (0.3%)
-
-Time Saved: 7.5 hours/week
-Error Prevention: 312 incorrect 1099s caught
+⚠ Matches Needing Correction: 312 (3.0%)
+⚠ Date Out of Range: 58 (0.6%)
+❓ Unmatched (Relius): 32 (0.3%)
+❓ Unmatched (Matrix): 0 (0.0%)
 ```
 
 ### Visualizations
@@ -80,9 +82,9 @@ Error Prevention: 312 incorrect 1099s caught
 ## 🎯 Key Features
 
 ### 📊 **Multi-System Data Integration**
-- Reads Excel exports from two legacy systems (Relius + Matrix)
+- Reads Excel exports from Relius distributions, Relius demographics, Relius Roth basis, and Matrix disbursements
 - Handles inconsistent formats, missing data, duplicate entries
-- Normalizes dates, amounts, SSNs, tax codes
+- Normalizes dates, amounts, SSNs, plan IDs, and tax codes to canonical names
 
 ### 🧹 **Intelligent Data Cleaning**
 - SSN validation and formatting (123-45-6789 → 123456789)
@@ -91,22 +93,24 @@ Error Prevention: 312 incorrect 1099s caught
 - Tax code standardization (7, 07, Code 7 → 7)
 
 ### 🔍 **Smart Matching Logic**
-- Multi-key matching: SSN + Amount + Date
-- Fuzzy amount matching (±$1.00 tolerance for rounding)
-- Date tolerance (±3 days for processing delays)
-- Classification: Perfect Match / Mismatch / Unmatched
+- Deterministic matching with config-driven keys (plan_id + ssn + gross_amt)
+- Date lag tolerance enforced from `MATCHING_CONFIG` (Matrix txn_date occurs after Relius export)
+- Explicit match_status labels: perfect_match, match_needs_correction, date_out_of_range, unmatched_relius, unmatched_matrix
+
+### 🧩 **Engines A/B/C**
+- **Engine A (Inherited matching):** Reconciles Relius vs Matrix distributions and applies inherited-plan tax-code rules (4/G).
+- **Engine B (Age-based, non-Roth):** Uses Relius demo data (DOB/term date) to suggest non-Roth tax codes (1/2/7); excludes rollovers and inherited plans.
+- **Engine C (Roth taxable):** Uses Matrix + Relius demo + Roth basis to suggest taxable amount, Roth initial year, and Roth tax codes; excludes inherited plans but does not exclude rollovers.
 
 ### 📈 **Business Intelligence**
-- KPI dashboard: match rates, error types, trends
-- Visualization: charts by plan, tax year, error category
-- Summary reports for stakeholders
+- Review-ready outputs: match_status, correction_reason, and action fields for QA
+- Notebook-friendly data frames for analysis and stakeholder summaries
 
 ### 📋 **Actionable Outputs**
 - **Correction file:** Excel sheet with recommended actions
-  - UPDATE_1099: Fix values without reissue
-  - VOID_AND_REISSUE: Void and reissue 1099
+  - UPDATE_1099: Safe to correct in Matrix
   - INVESTIGATE: Requires manual review
-- **Audit trail:** All decisions logged for compliance
+- **Audit trail:** match_status and correction_reason fields for review and traceability
 
 ---
 
@@ -116,28 +120,41 @@ Error Prevention: 312 incorrect 1099s caught
 **Business Question:** Which discrepancies require 1099 corrections?
 
 **Key Decisions:**
-- Define "match" criteria (SSN + amount + date)
-- Set tolerance thresholds (amount rounding, date windows)
-- Prioritize error types (gross amount > tax code > withholding)
+- Define match criteria (plan_id + ssn + gross_amt with date lag tolerance)
+- Centralize thresholds in `config.py` (MATCHING_CONFIG, AGE_TAXCODE_CONFIG, ROTH_TAXABLE_CONFIG)
+- Separate workflows into Engine A/B/C to keep rules auditable
 
 ---
 
 ### 2️⃣ Data Understanding
 
-**Relius Export (Historical Transactions)**
+**Relius Distribution Export (Transactions)**
 ```
-Columns: Participant_ID, SSN, Plan_ID, Trans_Type, Gross_Amt, 
-         Taxable_Amt, Fed_Withhold, Distribution_Date
-Records: ~5,000-15,000 per tax year
-Issues: Duplicate entries, missing dates, negative amounts (corrections)
+Columns (canonical): plan_id, ssn, gross_amt, exported_date, dist_code_1,
+         dist_name, tax_year
+Records: varies by plan and tax year
+Issues: duplicate entries, inconsistent headers, mixed date formats
 ```
 
 **Matrix Export (Disbursement/1099 Data)**
 ```
-Columns: SSN, Check_Num, Gross_Amt, Taxable_Amt, Fed_Withhold, 
-         Code_1099R, Payment_Date, Tax_Year
-Records: ~4,500-14,500 per tax year
-Issues: SSN format variations, rounding differences
+Columns (canonical): plan_id, ssn, gross_amt, fed_taxable_amt, txn_date,
+         tax_code_1, tax_code_2, transaction_id, matrix_account,
+         roth_initial_contribution_year
+Records: varies by plan and tax year
+Issues: SSN format variations, rounding differences, mixed tax code strings
+```
+
+**Relius Demo Export (Participant Master)**
+```
+Columns (canonical): plan_id, ssn, dob, term_date, first_name, last_name
+Purpose: age-based tax code rules for Engine B/C
+```
+
+**Relius Roth Basis Export**
+```
+Columns (canonical): plan_id, ssn, first_roth_tax_year, roth_basis_amt
+Purpose: Roth taxable analysis and Roth start-year corrections
 ```
 
 **See:** `docs/data_dictionary.md` for complete field definitions
@@ -146,18 +163,14 @@ Issues: SSN format variations, rounding differences
 
 ### 3️⃣ Data Cleaning Pipeline
 ```python
-# Example cleaning logic
-def clean_ssn(ssn):
-    """Normalize SSN to 9 digits"""
-    return re.sub(r'\D', '', str(ssn)).zfill(9)
+from src.config import MATRIX_COLUMN_MAP
+from src.normalizers import normalize_ssn_series, normalize_tax_code_series, to_date_series
 
-def standardize_date(date_str):
-    """Convert to YYYY-MM-DD"""
-    # Handles: 01/15/2024, 2024-01-15, Jan 15 2024
-    
-def normalize_amount(amount):
-    """Convert to integer cents (avoid float precision)"""
-    return int(float(amount) * 100)
+# Canonical column mapping + normalization
+df = df.rename(columns=MATRIX_COLUMN_MAP)
+df["ssn"] = normalize_ssn_series(df["ssn"])
+df["txn_date"] = to_date_series(df["txn_date"])
+df["tax_code_1"] = normalize_tax_code_series(df["tax_code_1"])
 ```
 
 **Results:** Clean data written to `data/processed/` (gitignored)
@@ -170,37 +183,37 @@ def normalize_amount(amount):
 ```sql
 -- Conceptual SQL for matching logic
 JOIN relius r ON matrix m
-WHERE r.ssn = m.ssn
-  AND ABS(r.gross_amt - m.gross_amt) < 1.00  -- $1 tolerance
-  AND ABS(DATEDIFF(r.dist_date, m.pay_date)) <= 3  -- 3-day window
+WHERE r.plan_id = m.plan_id
+  AND r.ssn = m.ssn
+  AND r.gross_amt = m.gross_amt
+  AND DATEDIFF(m.txn_date, r.exported_date) BETWEEN 0 AND 10
 ```
 
 **Step 2: Classification**
-- ✅ **Perfect Match:** All fields agree
-- ⚠️ **Amount Mismatch:** Amounts differ by >$1.00
-- ⚠️ **Code Mismatch:** 1099-R codes don't match
-- ⚠️ **Date Mismatch:** Dates differ by >3 days
-- ❓ **Unmatched:** Record exists in one system only
+- ✅ **perfect_match:** Joined and within date tolerance
+- ⚠️ **match_needs_correction:** Joined, within tolerance, but codes need update
+- ⚠️ **date_out_of_range:** Joined, but outside date tolerance window
+- ❓ **unmatched_relius / unmatched_matrix:** Record exists in one system only
 
 **Step 3: Prioritization**
-1. Amount mismatches (highest impact)
-2. Tax code mismatches (IRS reporting)
-3. Date mismatches (low impact, FYI only)
+1. Inherited-plan corrections (Engine A: code 4/G rules)
+2. Age-based non-Roth corrections (Engine B: 1/2/7 rules)
+3. Roth taxable + Roth tax-code corrections (Engine C: taxable amount, start year, B* rules)
 
 ---
 
 ### 5️⃣ Analysis & Insights
 
-**KPIs Tracked:**
-- Match rate % by plan, by month
-- Top 5 plans with highest mismatch counts
-- Distribution of error types
-- Time savings vs manual process
+**Review Checks:**
+- Match status counts by plan and tax year
+- Counts of recommended updates vs investigate-only items
+- Roth taxable vs non-Roth correction mix
+- Date out-of-range counts for operational follow-up
 
-**Example Insights:**
-- "Plan XYZ has 12% mismatch rate (vs 3% average) → investigate data quality"
-- "Code 7 mismatches increased 40% in Q4 → system bug identified"
-- "95% of date mismatches are ±1 day → safe to ignore"
+**Example Questions:**
+- "Which plans have the highest number of inherited-plan corrections?"
+- "Are Roth taxable updates concentrated in specific transaction years?"
+- "How many records are flagged for missing basis year data?"
 
 ---
 
@@ -208,17 +221,18 @@ WHERE r.ssn = m.ssn
 
 **Output Structure:**
 ```
-SSN | Plan | Relius_Amt | Matrix_Amt | Diff | Relius_Code | Matrix_Code | Action | Priority
+Transaction Id | Transaction Date | Participant SSN | Participant Name | Matrix Account |
+Current Tax Code 1 | Current Tax Code 2 | New Tax Code | New Taxable Amount |
+New First Year contrib | Reason | Action
 ```
 
 **Action Codes:**
-- `UPDATE_1099`: Safe to correct in system
-- `VOID_AND_REISSUE`: Must void and reissue 1099
-- `INVESTIGATE`: Requires manual review (complex case)
+- `UPDATE_1099`: Safe to correct in Matrix
+- `INVESTIGATE`: Requires manual review (missing/ambiguous data)
 
 **Business Impact:**
-- Operations team reviews file in 20 minutes (vs 8 hours manual)
-- Corrections applied before 1099 mailing deadline
+- Operations team reviews a focused correction list instead of full exports
+- Corrections applied before 1099 mailing deadlines
 - Audit trail for compliance
 
 ---
@@ -244,9 +258,14 @@ SSN | Plan | Relius_Amt | Matrix_Amt | Diff | Relius_Code | Matrix_Code | Action
 │   ├── __init__.py
 │   ├── config.py                       # Settings (tolerances, paths)
 │   ├── load_data.py                    # Excel → pandas DataFrames
+│   ├── normalizers.py                  # Canonical field normalization
 │   ├── clean_relius.py                 # Relius cleaning logic
+│   ├── clean_relius_demo.py            # Relius demographics cleaning
+│   ├── clean_relius_roth_basis.py      # Relius Roth basis cleaning
 │   ├── clean_matrix.py                 # Matrix cleaning logic
-│   ├── match_transactions.py           # Matching algorithm
+│   ├── match_transactions.py           # Engine A (inherited matching)
+│   ├── age_taxcode_analysis.py         # Engine B (age-based non-Roth)
+│   ├── roth_taxable_analysis.py        # Engine C (Roth taxable)
 │   └── build_correction_file.py        # Generate Excel output
 │
 ├── notebooks/                          # Analysis walkthrough
@@ -263,7 +282,8 @@ SSN | Plan | Relius_Amt | Matrix_Amt | Diff | Relius_Code | Matrix_Code | Action
 │       └── correction_file_sample.xlsx
 │
 ├── tests/                              # Unit tests (optional)
-│   └── test_matching.py
+│   ├── pipelines/
+│   └── roth_taxable/
 │
 └── docs/
     ├── business_context.md             # Problem narrative
@@ -341,14 +361,10 @@ python -c "import openpyxl; print('✓ openpyxl installed')"
 ### Usage
 
 #### Option 1: Run Complete Pipeline (Command Line)
+Runs the Engine A inherited-plan workflow using sample data in `data/sample/`.
 ```bash
-# Process sample data
-python -m src.match_transactions
-
-# Generate correction file
+# Engine A: inherited-plan reconciliation + correction file
 python -m src.build_correction_file
-
-# Output: reports/samples/correction_file_[timestamp].xlsx
 ```
 
 #### Option 2: Interactive Analysis (Jupyter)
@@ -360,21 +376,27 @@ jupyter notebook
 # 1. notebooks/01_data_understanding.ipynb
 # 2. notebooks/02_cleaning_pipeline.ipynb
 # 3. notebooks/03_matching_analysis.ipynb
+# (Engine B/C workflows are typically run from notebooks or scripts)
 ```
 
 #### Option 3: Use as Module
 ```python
-from src import load_data, match_transactions, build_correction_file
+from src.load_data import load_relius_excel, load_matrix_excel
+from src.clean_relius import clean_relius
+from src.clean_matrix import clean_matrix
+from src.match_transactions import reconcile_relius_matrix
+from src.build_correction_file import build_correction_dataframe, write_correction_file
 
-# Load data
-relius_df = load_data.load_relius('data/sample/relius_sample.xlsx')
-matrix_df = load_data.load_matrix('data/sample/matrix_sample.xlsx')
+# Load and clean
+relius_raw = load_relius_excel("data/sample/relius_sample.xlsx")
+matrix_raw = load_matrix_excel("data/sample/matrix_sample.xlsx")
+relius_clean = clean_relius(relius_raw)
+matrix_clean = clean_matrix(matrix_raw)
 
-# Run matching
-results = match_transactions.reconcile(relius_df, matrix_df)
-
-# Generate output
-build_correction_file.create(results, 'output.xlsx')
+# Engine A matching
+matches = reconcile_relius_matrix(relius_clean, matrix_clean)
+corrections = build_correction_dataframe(matches)
+write_correction_file(corrections, "output.xlsx")
 ```
 
 ---
@@ -383,29 +405,12 @@ build_correction_file.create(results, 'output.xlsx')
 
 **Console:**
 ```bash
-=== 1099 Reconciliation Pipeline ===
-
-[1/5] Loading Relius data... ✓ (98 records)
-[2/5] Loading Matrix data... ✓ (95 records)
-[3/5] Cleaning and normalizing... ✓
-[4/5] Running matching algorithm... ✓
-[5/5] Generating correction file... ✓
-
-Results:
-  Perfect Matches: 87 (91.6%)
-  Mismatches: 6 (6.3%)
-  Unmatched (Relius): 2 (2.1%)
-  Unmatched (Matrix): 0 (0.0%)
-
-Output: reports/samples/correction_file_20241208.xlsx
-
-Time: 1.2 seconds
+Corrections written to: reports/samples/correction_file_20241208_153045.xlsx
+Total corrections: 6
 ```
 
 **Files Created:**
 - `reports/samples/correction_file_[date].xlsx` - Main deliverable
-- `reports/figures/match_summary.png` - Visual summary
-- `logs/reconciliation_[date].log` - Audit trail
 
 ---
 
@@ -413,22 +418,22 @@ Time: 1.2 seconds
 
 ### Quantified Business Value
 
-| Metric | Before (Manual) | After (Automated) | Improvement |
-|--------|----------------|-------------------|-------------|
-| **Time per reconciliation** | 8 hours | 20 minutes | **95% reduction** |
-| **Match accuracy** | 92% (human error) | 98% | **6% improvement** |
-| **1099 errors caught** | ~50% (spot checks) | ~95% (systematic) | **90% better** |
-| **Processing capacity** | 1 tax year/week | 10 tax years/day | **50x faster** |
-| **Cost savings** | - | ~$15K/year | (labor) |
+| Metric | Manual Baseline | Automated Pipeline | Outcome |
+|--------|----------------|-------------------|---------|
+| **Time per reconciliation** | Hours of manual review | Automated run + targeted review | Material reduction |
+| **Match accuracy** | Manual spot checks | Deterministic rules + review list | More consistent |
+| **1099 error discovery** | Reactive | Pre-mailing review | Lower risk |
+| **Processing capacity** | Limited by manual effort | Batch processing across plans | Higher throughput |
+| **Cost savings** | Labor-intensive | Reduced manual effort | Operational savings |
 
 ### Real-World Impact
 
 **Operations Team:**
-- "This tool saved us during tax season. What used to take a full day now takes 20 minutes."
-- "We caught 47 errors before mailing 1099s - that's 47 fewer reissues."
+- Uses a structured correction file rather than ad hoc spreadsheets
+- Focuses review on specific match_status and correction_reason flags
 
 **Compliance:**
-- "Having an audit trail and systematic process gives us confidence in our 1099 accuracy."
+- Receives a consistent audit trail with suggested corrections and rationale
 
 ---
 
@@ -440,7 +445,7 @@ Time: 1.2 seconds
 - ✅ ETL pipeline design (Extract, Transform, Load)
 - ✅ Data validation and quality checks
 - ✅ Handling messy real-world data (missing values, duplicates, format inconsistencies)
-- ✅ Performance optimization (10K+ records in <2 seconds)
+- ✅ Performance optimization with vectorized pandas operations
 
 **Data Analysis:**
 - ✅ Exploratory data analysis (EDA) on financial systems
@@ -471,8 +476,8 @@ Time: 1.2 seconds
 3. **SSN Variations:** 123456789, 123-45-6789, XXX-XX-6789 (partial)
    - **Solution:** Regex-based normalization + validation
 
-4. **Performance:** Initial version took 15 minutes for 10K records
-   - **Solution:** Vectorized pandas operations → 2 seconds
+4. **Performance:** Early version was too slow for large batches
+   - **Solution:** Vectorized pandas operations and minimized per-row loops
 
 ---
 
@@ -485,10 +490,10 @@ Time: 1.2 seconds
 - [x] Correction file generation
 - [x] Jupyter analysis notebooks
 
-### ✅ Phase 2: Production Deployment (Completed)
+### ✅ Phase 2: Documentation & Portfolio Packaging (Completed)
 - [x] Synthetic data for portfolio
 - [x] Comprehensive documentation
-- [x] Privacy compliance review
+- [x] Privacy-first cleanup of sample outputs
 
 ### 🚧 Phase 3: Enhancements (In Progress)
 - [ ] Web dashboard (Streamlit) for interactive analysis
@@ -549,8 +554,8 @@ I'm **Manuel Reyes**, transitioning into data science after 6 years in trading a
 **What makes this project special:**
 - Built to solve a real business problem I experienced firsthand
 - Demonstrates end-to-end thinking: problem → solution → impact
-- Production-quality code with privacy compliance
-- Quantified business value ($15K/year savings, 95% time reduction)
+- Portfolio-ready code with privacy compliance
+- Clear business value tied to reduced manual review and audit-ready outputs
 
 ### Connect With Me
 
