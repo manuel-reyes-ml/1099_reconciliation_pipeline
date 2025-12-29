@@ -20,3 +20,4 @@ gh label create "area: config"     --description "Config/schema mappings"       
 gh label create "area: cleaning"   --description "Cleaning/normalization modules"   || true
 gh label create "area: export"     --description "Correction template export"       || true
 gh label create "area: notebooks"  --description "Notebooks / walkthroughs"         || true
+gh label create "area: data-visualization"  --description "Plot key metrics / KPIs"         || true
