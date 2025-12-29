@@ -195,7 +195,7 @@ def test_roth_taxable_no_action_clears_correction_reason() -> None:
             "plan_id": ["300005A"],
             "ssn": ["123456780"],
             "first_roth_tax_year": [2010],
-            "roth_basis_amt": [10.0],
+            "roth_basis_amt": [200.0],
         }
     )
 
@@ -206,6 +206,7 @@ def test_roth_taxable_no_action_clears_correction_reason() -> None:
     assert pd.isna(result.loc[0, "suggested_tax_code_1"])
     assert pd.isna(result.loc[0, "suggested_tax_code_2"])
     assert pd.isna(result.loc[0, "new_tax_code"])
+    assert pd.isna(result.loc[0, "suggested_taxable_amt"])
 
 
 def test_build_correction_dataframe_exports_new_tax_code() -> None:
