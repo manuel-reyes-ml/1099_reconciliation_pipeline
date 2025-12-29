@@ -12,11 +12,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-CORRECTION_STATUS = "match_needs_correction"
+from .config import MATCH_STATUS_CONFIG
+
+
+STATUS_CFG = MATCH_STATUS_CONFIG
+CORRECTION_STATUS = STATUS_CFG.needs_correction
 MATCH_STATUS_GROUPS = [
-    ("excluded_rollover_or_inherited", "excluded_from_age_engine_rollover_or_inherited"),
-    ("insufficient_data", "age_rule_insufficient_data"),
-    ("perfect_match", "perfect_match"),
+    ("excluded_rollover_or_inherited", STATUS_CFG.excluded_age_engine),
+    ("insufficient_data", STATUS_CFG.insufficient_data),
+    ("no_action", STATUS_CFG.no_action),
     ("needs_correction", CORRECTION_STATUS),
 ]
 
