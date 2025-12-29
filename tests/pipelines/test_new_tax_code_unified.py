@@ -34,6 +34,36 @@ def test_match_transactions_sets_new_tax_code() -> None:
     assert result.loc[0, "new_tax_code"] == "4G"
 
 
+def test_match_transactions_no_action_clears_suggested_codes() -> None:
+    relius_df = pd.DataFrame(
+        {
+            "plan_id": ["300004PLAT"],
+            "ssn": ["123456780"],
+            "gross_amt": [100.0],
+            "exported_date": ["2025-01-01"],
+            "dist_category_relius": ["rollover"],
+        }
+    )
+    matrix_df = pd.DataFrame(
+        {
+            "plan_id": ["300004PLAT"],
+            "ssn": ["123456780"],
+            "gross_amt": [100.0],
+            "txn_date": ["2025-01-05"],
+            "transaction_id": ["tx1b"],
+            "tax_code_1": ["4"],
+            "tax_code_2": ["G"],
+        }
+    )
+
+    result = reconcile_relius_matrix(relius_df, matrix_df, apply_business_rules=True)
+
+    assert result.loc[0, "match_status"] == "match_no_action"
+    assert pd.isna(result.loc[0, "suggested_tax_code_1"])
+    assert pd.isna(result.loc[0, "suggested_tax_code_2"])
+    assert pd.isna(result.loc[0, "new_tax_code"])
+
+
 # Engine B
 def test_age_taxcode_analysis_sets_new_tax_code() -> None:
     matrix_df = pd.DataFrame(
@@ -92,6 +122,9 @@ def test_age_taxcode_no_action_clears_correction_reason() -> None:
 
     assert result.loc[0, "match_status"] == "match_no_action"
     assert pd.isna(result.loc[0, "correction_reason"])
+    assert pd.isna(result.loc[0, "suggested_tax_code_1"])
+    assert pd.isna(result.loc[0, "suggested_tax_code_2"])
+    assert pd.isna(result.loc[0, "new_tax_code"])
 
 
 # Engine C
@@ -170,6 +203,9 @@ def test_roth_taxable_no_action_clears_correction_reason() -> None:
 
     assert result.loc[0, "match_status"] == "match_no_action"
     assert pd.isna(result.loc[0, "correction_reason"])
+    assert pd.isna(result.loc[0, "suggested_tax_code_1"])
+    assert pd.isna(result.loc[0, "suggested_tax_code_2"])
+    assert pd.isna(result.loc[0, "new_tax_code"])
 
 
 def test_build_correction_dataframe_exports_new_tax_code() -> None:
