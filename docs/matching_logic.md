@@ -283,7 +283,7 @@ For inherited plans, expected codes are driven by distribution type:
 `dist_category_relius` is derived from Relius `dist_name` in `clean_relius.py`.
 
 Engine A compares Matrix current codes vs expected:
-- If aligned → `perfect_match`
+- If aligned → `match_no_action`
 - If not aligned → `match_needs_correction` + populate:
   - `suggested_tax_code_1`
   - `suggested_tax_code_2` (if applicable)
@@ -356,7 +356,7 @@ The engine compares expected vs current codes:
 - **Non-Roth:** compare `tax_code_1` only
 
 Output:
-- `perfect_match` when codes already match expected
+- `match_no_action` when codes already match expected
 - `match_needs_correction` when codes differ
   - `suggested_tax_code_1` populated (`suggested_tax_code_2` remains `NA`)
   - `action = UPDATE_1099`
@@ -460,8 +460,7 @@ The following status values appear across engine outputs:
 
 | Status | Meaning | Typical Next Step |
 |---|---|---|
-| `perfect_match` | Codes already correct (Engine A/B) | No action |
-| `match_no_action` | Roth row with no updates (Engine C) | No action |
+| `match_no_action` | Codes already correct (Engine A/B/C) | No action |
 | `match_needs_correction` | Row needs correction (A/B/C) | Export to correction file |
 | `match_needs_review` | Engine C flagged review-only item | Investigate |
 | `date_out_of_range` | Candidate match but txn_date outside allowed window | Investigate timing |
