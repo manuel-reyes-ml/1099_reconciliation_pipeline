@@ -412,6 +412,11 @@ def run_roth_taxable_analysis(
         df["match_status"] == status_cfg.no_action,
         ["suggested_tax_code_1", "suggested_tax_code_2"],
     ] = pd.NA
+    df.loc[
+        (df["match_status"] == status_cfg.no_action)
+        & df["fed_taxable_amt"].eq(0),
+        "suggested_taxable_amt",
+    ] = pd.NA
 
     # Compose combined tax code for convenience (B7, H4, etc.)
     s1 = df["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)
