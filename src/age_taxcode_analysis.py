@@ -347,6 +347,8 @@ def run_age_taxcode_analysis(
     # 7) Suggested codes for correction file builder
     df["suggested_tax_code_1"] = df["expected_tax_code_1"]
     df["suggested_tax_code_2"] = df["expected_tax_code_2"]
+    mask_no_action = df["match_status"] == status_cfg.no_action
+    df.loc[mask_no_action, ["suggested_tax_code_1", "suggested_tax_code_2"]] = pd.NA
 
     # Compose combined new tax code (e.g., 7, B2) from suggested codes.
     s1 = df["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)

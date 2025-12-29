@@ -408,6 +408,10 @@ def run_roth_taxable_analysis(
         lambda reasons: reason_joiner.join(f"{bullet}{r}" for r in reasons) if reasons else pd.NA
     )
     df.loc[df["match_status"] == status_cfg.no_action, "correction_reason"] = pd.NA
+    df.loc[
+        df["match_status"] == status_cfg.no_action,
+        ["suggested_tax_code_1", "suggested_tax_code_2"],
+    ] = pd.NA
 
     # Compose combined tax code for convenience (B7, H4, etc.)
     s1 = df["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)
