@@ -13,6 +13,12 @@ import matplotlib.pyplot as plt
 
 
 CORRECTION_STATUS = "match_needs_correction"
+MATCH_STATUS_GROUPS = [
+    ("excluded_rollover_or_inherited", "excluded_from_age_engine_rollover_or_inherited"),
+    ("insufficient_data", "age_rule_insufficient_data"),
+    ("perfect_match", "perfect_match"),
+    ("needs_correction", CORRECTION_STATUS),
+]
 
 
 def _validate_required_columns(df: pd.DataFrame, required_cols: list[str]) -> None:
@@ -63,6 +69,225 @@ def build_age_taxcode_metrics(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return metrics
+
+
+def build_age_taxcode_kpi_summary(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute counts and percentages for key match_status categories.
+
+    Required columns:
+      - match_status
+    """
+
+    _validate_required_columns(df, ["match_status"])
+
+    columns = ["status_group", "count", "percent"]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    total = int(df.shape[0])
+    rows = []
+    for group_label, status_value in MATCH_STATUS_GROUPS:
+        count = int((df["match_status"] == status_value).sum())
+        percent = count / total if total else 0.0
+        rows.append(
+            {
+                "status_group": group_label,
+                "count": count,
+                "percent": percent,
+            }
+        )
+
+    return pd.DataFrame(rows, columns=columns)
+
+
+def plot_age_taxcode_kpi_summary(
+    summary_df: pd.DataFrame,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot a KPI summary of match_status categories as percent of records.
+    """
+
+    _validate_required_columns(summary_df, ["status_group", "count", "percent"])
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    if summary_df.empty:
+        ax.text(0.5, 0.5, "No data available", ha="center", va="center")
+        ax.set_axis_off()
+        return fig, ax
+
+    order = [group_label for group_label, _ in MATCH_STATUS_GROUPS]
+    data = summary_df.set_index("status_group").reindex(order).fillna(0)
+    counts = data["count"].astype(int)
+    percents = data["percent"] * 100
+
+    ax.barh(order, percents, color="#72B7B2")
+    ax.set_xlabel("Percent of Records")
+    ax.set_title("Engine B Match Status Summary")
+
+    max_pct = float(percents.max() if len(percents) else 0)
+    ax.set_xlim(0, max(10.0, max_pct * 1.15))
+
+    for idx, (pct, count) in enumerate(zip(percents, counts)):
+        ax.text(
+            pct + 0.5,
+            idx,
+            f"{pct:.1f}% ({count})",
+            va="center",
+        )
+
+    return fig, ax
+
+
+def build_term_date_correction_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute correction rates grouped by term_date availability.
+
+    Required columns:
+      - match_status
+      - term_date
+    """
+
+    _validate_required_columns(df, ["match_status", "term_date"])
+
+    columns = ["term_date_group", "total_txns", "correction_count", "correction_rate"]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    term_dt = pd.to_datetime(df["term_date"], errors="coerce")
+    working = df.copy()
+    working["term_date_group"] = term_dt.notna().map(
+        {True: "with_term_date", False: "without_term_date"}
+    )
+    working["is_correction"] = working["match_status"] == CORRECTION_STATUS
+
+    metrics = (
+        working.groupby("term_date_group", dropna=False)
+        .agg(
+            total_txns=("match_status", "size"),
+            correction_count=("is_correction", "sum"),
+        )
+        .reset_index()
+    )
+    metrics["correction_rate"] = (
+        metrics["correction_count"] / metrics["total_txns"]
+    )
+
+    return metrics[columns]
+
+
+def plot_term_date_correction_rates(
+    metrics_df: pd.DataFrame,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot correction rate comparison for records with vs without term_date.
+    """
+
+    _validate_required_columns(
+        metrics_df,
+        ["term_date_group", "total_txns", "correction_count", "correction_rate"],
+    )
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    if metrics_df.empty:
+        ax.text(0.5, 0.5, "No data available", ha="center", va="center")
+        ax.set_axis_off()
+        return fig, ax
+
+    order = ["with_term_date", "without_term_date"]
+    data = metrics_df.set_index("term_date_group").reindex(order).fillna(0)
+    rates = (data["correction_rate"] * 100).astype(float)
+    counts = data["correction_count"].astype(int)
+    totals = data["total_txns"].astype(int)
+
+    ax.bar(order, rates, color="#4C78A8")
+    ax.set_ylabel("Correction Rate (%)")
+    ax.set_title("Engine B Correction Rate by Term Date Presence")
+    ax.set_ylim(0, max(5.0, float(rates.max() if len(rates) else 0) * 1.2))
+
+    for idx, (rate, count, total) in enumerate(zip(rates, counts, totals)):
+        ax.text(
+            idx,
+            rate + 0.3,
+            f"{rate:.1f}% ({count}/{total})",
+            ha="center",
+            va="bottom",
+        )
+
+    return fig, ax
+
+
+def build_correction_reason_crosstab(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build a correction-only crosstab of tax_code_1 vs correction_reason.
+
+    Required columns:
+      - match_status
+      - tax_code_1
+      - correction_reason
+    """
+
+    _validate_required_columns(df, ["match_status", "tax_code_1", "correction_reason"])
+
+    if df.empty:
+        empty = pd.DataFrame()
+        empty.index.name = "tax_code_1"
+        empty.columns.name = "correction_reason"
+        return empty
+
+    corrections = df[df["match_status"] == CORRECTION_STATUS].copy()
+    if corrections.empty:
+        empty = pd.DataFrame()
+        empty.index.name = "tax_code_1"
+        empty.columns.name = "correction_reason"
+        return empty
+
+    crosstab = pd.crosstab(
+        corrections["tax_code_1"].fillna("Unknown").astype("string"),
+        corrections["correction_reason"].fillna("Unknown").astype("string"),
+        dropna=False,
+    )
+    crosstab.index.name = "tax_code_1"
+    crosstab.columns.name = "correction_reason"
+    return crosstab
+
+
+def plot_correction_reason_crosstab(
+    crosstab_df: pd.DataFrame,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot a correction-only tax_code_1 vs correction_reason cross-breakdown.
+    """
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    if crosstab_df.empty:
+        ax.text(0.5, 0.5, "No data available", ha="center", va="center")
+        ax.set_axis_off()
+        return fig, ax
+
+    data = crosstab_df.copy()
+    ax.imshow(data.values, cmap="Blues")
+
+    ax.set_xticks(range(len(data.columns)))
+    ax.set_yticks(range(len(data.index)))
+    ax.set_xticklabels(data.columns, rotation=45, ha="right")
+    ax.set_yticklabels(data.index)
+    ax.set_title("Corrections: Tax Code 1 x Correction Reason")
+
+    for i in range(data.shape[0]):
+        for j in range(data.shape[1]):
+            ax.text(
+                j,
+                i,
+                str(int(data.iloc[i, j])),
+                ha="center",
+                va="center",
+                color="black",
+            )
+
+    fig.tight_layout()
+    return fig, ax
 
 
 def plot_corrections_over_time(
