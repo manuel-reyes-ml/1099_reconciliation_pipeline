@@ -61,10 +61,10 @@ Core matching logic
      where MAX_DELAY_DAYS is configured (e.g., 10).
 
 3) Classification
-   - perfect_match: merged and within date tolerance and tax codes already correct
+   - match_no_action: merged and within date tolerance and tax codes already correct
    - match_needs_correction: merged and within date tolerance but tax code(s)
      do not meet business rules
-   - date_out_range: merged but txn_date outside tolerance window
+   - date_out_of_range: merged but txn_date outside tolerance window
    - unmatched_relius: Relius row has no corresponding Matrix row
    - unmatched_matrix: (optional depending on merge strategy) Matrix row with no
      corresponding Relius row
@@ -111,8 +111,9 @@ from typing import Iterable, Optional  # Type hints helpers
 import pandas as pd
 
 from .config import (
-    MATCHING_CONFIG,       # A dataclass instance with parameters such as max_date_lag_days.
     INHERITED_PLAN_IDS,    # A collecion (Set) of plan IDs that are considered "inherited".
+    MATCH_STATUS_CONFIG,
+    MATCHING_CONFIG,       # A dataclass instance with parameters such as max_date_lag_days.
 )
 
 
@@ -291,6 +292,7 @@ def reconcile_relius_matrix(
     # Work on copies
     r = relius_clean.copy()
     m = matrix_clean.copy()
+    status_cfg = MATCH_STATUS_CONFIG
 
     # Optionally filter by selected plan_ids (user-driven, not hard-coded)
     # set() -> converts to iterable Set for faster plan ID checks.
@@ -357,8 +359,8 @@ def reconcile_relius_matrix(
     # We use "_merge" values to define "match_status":
     #   left_only   -> present only in Relius
     #   right_only  -> present only in Matrix
-    merged.loc[merged["_merge"] == "left_only", "match_status"] = "unmatched_relius"
-    merged.loc[merged["_merge"] == "right_only", "match_status"] = "unmatched_matrix"
+    merged.loc[merged["_merge"] == "left_only", "match_status"] = status_cfg.unmatched_relius
+    merged.loc[merged["_merge"] == "right_only", "match_status"] = status_cfg.unmatched_matrix
 
     # Rows that exist in both systems
     both_mask = merged["_merge"] == "both"
@@ -366,10 +368,10 @@ def reconcile_relius_matrix(
     # Date out of range
     # for rows in both systems, but date outside of tolerance
     out_of_range = both_mask & ~merged["date_within_tolerance"]
-    merged.loc[out_of_range, "match_status"] = "date_out_of_range"
+    merged.loc[out_of_range, "match_status"] = status_cfg.date_out_of_range
 
     # For rows that are in both & within date tolerance,
-    # we will decide between perfect_match vs match_needs_correction
+    # we will decide between match_no_action vs match_needs_correction
     within_range = both_mask & merged["date_within_tolerance"]
 
     # Apply business rules (inherited plan tax-code logic)
@@ -385,17 +387,17 @@ def reconcile_relius_matrix(
         merged["action"] = pd.NA
         merged["code_matches_expected"] = pd.NA
 
-    # Perfect matches (within date range, no corrections needed)
+    # No-action matches (within date range, no corrections needed)
     merged.loc[
         within_range & ~merged["needs_correction"],
         "match_status",
-    ] = "perfect_match"
+    ] = status_cfg.no_action
 
     # Matches that require correction (within date range, but codes wrong)
     merged.loc[
         within_range & merged["needs_correction"],
         "match_status",
-    ] = "match_needs_correction"
+    ] = status_cfg.needs_correction
 
     # Compose combined new tax code (e.g., 4G) from suggested codes.
     s1 = merged["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)
