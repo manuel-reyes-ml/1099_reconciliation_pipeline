@@ -81,6 +81,7 @@ import pandas as pd
 from .config import (                # '.' in .config looks for a sibling module inside src/
     AGE_TAXCODE_CONFIG,
     INHERITED_PLAN_IDS,
+    MATCH_STATUS_CONFIG,
     ROTH_TAXCODE_CONFIG,
     ROTH_TAXABLE_CONFIG,
     RothTaxableConfig,
@@ -113,6 +114,7 @@ def run_roth_taxable_analysis(
     """
     
     df = matrix_df.copy()
+    status_cfg = MATCH_STATUS_CONFIG
     df["plan_id"] = normalize_plan_id_series(df["plan_id"], string_dtype=False)
 
     mask_roth = _is_roth_plan(df["plan_id"], cfg)
@@ -288,7 +290,7 @@ def run_roth_taxable_analysis(
         roth_year_change_required, "first_roth_tax_year"
     ]
 
-    df["match_status"] = cfg.status_no_action
+    df["match_status"] = status_cfg.no_action
     df["action"] = pd.NA
 
     _append_action(df, roth_year_change_required, cfg.action_update)
@@ -395,9 +397,9 @@ def run_roth_taxable_analysis(
     has_update = df["actions"].apply(lambda a: tc_cfg.action_update in a if a is not None else False)
     has_investigate = df["actions"].apply(lambda a: tc_cfg.action_investigate in a if a is not None else False)
 
-    df.loc[~mask_engine_excluded & has_update, "match_status"] = cfg.status_needs_correction
-    df.loc[~mask_engine_excluded & ~has_update & has_investigate, "match_status"] = cfg.status_needs_review
-    df.loc[~mask_engine_excluded & ~has_update & ~has_investigate, "match_status"] = cfg.status_no_action
+    df.loc[~mask_engine_excluded & has_update, "match_status"] = status_cfg.needs_correction
+    df.loc[~mask_engine_excluded & ~has_update & has_investigate, "match_status"] = status_cfg.needs_review
+    df.loc[~mask_engine_excluded & ~has_update & ~has_investigate, "match_status"] = status_cfg.no_action
 
     # Correction reasons with bullet + newline
     reason_joiner = tc_cfg.reason_joiner
@@ -405,6 +407,16 @@ def run_roth_taxable_analysis(
     df["correction_reason"] = df["correction_reasons"].apply(
         lambda reasons: reason_joiner.join(f"{bullet}{r}" for r in reasons) if reasons else pd.NA
     )
+    df.loc[df["match_status"] == status_cfg.no_action, "correction_reason"] = pd.NA
+    df.loc[
+        df["match_status"] == status_cfg.no_action,
+        ["suggested_tax_code_1", "suggested_tax_code_2"],
+    ] = pd.NA
+    df.loc[
+        (df["match_status"] == status_cfg.no_action)
+        & df["fed_taxable_amt"].eq(0),
+        "suggested_taxable_amt",
+    ] = pd.NA
 
     # Compose combined tax code for convenience (B7, H4, etc.)
     s1 = df["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)

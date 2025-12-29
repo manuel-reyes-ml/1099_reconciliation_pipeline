@@ -95,7 +95,7 @@ Total Transactions Processed: 10,247
 ### 🔍 **Smart Matching Logic**
 - Deterministic matching with config-driven keys (plan_id + ssn + gross_amt)
 - Date lag tolerance enforced from `MATCHING_CONFIG` (Matrix txn_date occurs after Relius export)
-- Explicit match_status labels: perfect_match, match_needs_correction, date_out_of_range, unmatched_relius, unmatched_matrix
+- Explicit match_status labels: match_no_action, match_needs_correction, date_out_of_range, unmatched_relius, unmatched_matrix
 
 ### 🧩 **Engines A/B/C**
 - **Engine A (Inherited matching):** Reconciles Relius vs Matrix distributions and applies inherited-plan tax-code rules (4/G).
@@ -190,7 +190,7 @@ WHERE r.plan_id = m.plan_id
 ```
 
 **Step 2: Classification**
-- ✅ **perfect_match:** Joined and within date tolerance
+- ✅ **match_no_action:** Joined and within date tolerance
 - ⚠️ **match_needs_correction:** Joined, within tolerance, but codes need update
 - ⚠️ **date_out_of_range:** Joined, but outside date tolerance window
 - ❓ **unmatched_relius / unmatched_matrix:** Record exists in one system only

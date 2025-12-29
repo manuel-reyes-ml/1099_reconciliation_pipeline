@@ -94,7 +94,12 @@ Public API
 
 from __future__ import annotations
 import pandas as pd
-from .config import AGE_TAXCODE_CONFIG, INHERITED_PLAN_IDS, ROTH_TAXABLE_CONFIG
+from .config import (
+    AGE_TAXCODE_CONFIG,
+    INHERITED_PLAN_IDS,
+    MATCH_STATUS_CONFIG,
+    ROTH_TAXABLE_CONFIG,
+)
 
 from .normalizers import (
     attained_age_by_year_end,
@@ -203,6 +208,7 @@ def run_age_taxcode_analysis(
     """
 
     cfg = AGE_TAXCODE_CONFIG
+    status_cfg = MATCH_STATUS_CONFIG
 
     # 1) Attached demographics (DOB, termm_date, names) to Matrix data
     df = attach_demo_to_matrix(matrix_df, relius_demo_df)
@@ -269,9 +275,9 @@ def run_age_taxcode_analysis(
     df["action"] = pd.NA
 
     # Default match_status
-    df["match_status"] = "age_rule_insufficient_data"
+    df["match_status"] = status_cfg.insufficient_data
     df.loc[df["age_engine_excluded"], "match_status"] = (
-        "excluded_from_age_engine_rollover_or_inherited"
+        status_cfg.excluded_age_engine
     )
 
 
@@ -329,17 +335,20 @@ def run_age_taxcode_analysis(
 
     df["code_matches_expected"] = matches_non_roth
 
-    # perfect_match where codes match expectation
-    df.loc[df["code_matches_expected"], "match_status"] = "perfect_match"
+    # no-action where codes match expectation
+    df.loc[df["code_matches_expected"], "match_status"] = status_cfg.no_action
 
     # needs correction where we have expected code but Matrix differs
     need_corr_mask = has_expected & ~df["code_matches_expected"] & ~df["age_engine_excluded"]
-    df.loc[need_corr_mask, "match_status"] = "match_needs_correction"
+    df.loc[need_corr_mask, "match_status"] = status_cfg.needs_correction
     df.loc[need_corr_mask, "action"] = "UPDATE_1099"
+    df.loc[df["match_status"] == status_cfg.no_action, "correction_reason"] = pd.NA
 
     # 7) Suggested codes for correction file builder
     df["suggested_tax_code_1"] = df["expected_tax_code_1"]
     df["suggested_tax_code_2"] = df["expected_tax_code_2"]
+    mask_no_action = df["match_status"] == status_cfg.no_action
+    df.loc[mask_no_action, ["suggested_tax_code_1", "suggested_tax_code_2"]] = pd.NA
 
     # Compose combined new tax code (e.g., 7, B2) from suggested codes.
     s1 = df["suggested_tax_code_1"].astype("string").str.strip().str.upper().replace("", pd.NA)
