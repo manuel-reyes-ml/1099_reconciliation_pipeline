@@ -12,22 +12,22 @@ def test_build_age_taxcode_kpi_summary_counts() -> None:
     df = pd.DataFrame(
         {
             "match_status": [
-                "perfect_match",
+                "match_no_action",
                 "match_needs_correction",
                 "age_rule_insufficient_data",
                 "excluded_from_age_engine_rollover_or_inherited",
-                "perfect_match",
+                "match_no_action",
             ]
         }
     )
 
     summary = build_age_taxcode_kpi_summary(df).set_index("status_group")
 
-    assert summary.loc["perfect_match", "count"] == 2
+    assert summary.loc["no_action", "count"] == 2
     assert summary.loc["needs_correction", "count"] == 1
     assert summary.loc["insufficient_data", "count"] == 1
     assert summary.loc["excluded_rollover_or_inherited", "count"] == 1
-    assert summary.loc["perfect_match", "percent"] == pytest.approx(2 / 5)
+    assert summary.loc["no_action", "percent"] == pytest.approx(2 / 5)
 
 
 def test_build_age_taxcode_kpi_summary_empty() -> None:
@@ -40,7 +40,7 @@ def test_build_age_taxcode_kpi_summary_empty() -> None:
 
 def test_build_age_taxcode_kpi_summary_missing_columns() -> None:
     with pytest.raises(ValueError, match="Missing required columns"):
-        build_age_taxcode_kpi_summary(pd.DataFrame({"status": ["perfect_match"]}))
+        build_age_taxcode_kpi_summary(pd.DataFrame({"status": ["match_no_action"]}))
 
 
 def test_build_term_date_correction_metrics_counts() -> None:
@@ -48,9 +48,9 @@ def test_build_term_date_correction_metrics_counts() -> None:
         {
             "match_status": [
                 "match_needs_correction",
-                "perfect_match",
+                "match_no_action",
                 "match_needs_correction",
-                "perfect_match",
+                "match_no_action",
             ],
             "term_date": ["2023-01-01", None, "", "2024-06-01"],
         }
@@ -82,7 +82,7 @@ def test_build_term_date_correction_metrics_empty() -> None:
 def test_build_term_date_correction_metrics_missing_columns() -> None:
     with pytest.raises(ValueError, match="Missing required columns"):
         build_term_date_correction_metrics(
-            pd.DataFrame({"match_status": ["perfect_match"]})
+            pd.DataFrame({"match_status": ["match_no_action"]})
         )
 
 
@@ -92,7 +92,7 @@ def test_build_correction_reason_crosstab_counts() -> None:
             "match_status": [
                 "match_needs_correction",
                 "match_needs_correction",
-                "perfect_match",
+                "match_no_action",
                 "match_needs_correction",
             ],
             "tax_code_1": ["1", "1", "2", None],
