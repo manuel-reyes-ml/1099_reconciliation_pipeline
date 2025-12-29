@@ -353,6 +353,25 @@ SPECIAL_CODE_RULES = [
 USE_SAMPLE_DATA_DEFAULT = True
 
 
+@dataclass(frozen=True)
+class MatchStatusConfig:
+
+    """
+
+    Canonical match_status values shared across reconciliation engines.
+
+    """
+
+    no_action: str = "match_no_action"
+    needs_correction: str = "match_needs_correction"
+    needs_review: str = "match_needs_review"
+    date_out_of_range: str = "date_out_of_range"
+    unmatched_relius: str = "unmatched_relius"
+    unmatched_matrix: str = "unmatched_matrix"
+    excluded_age_engine: str = "excluded_from_age_engine_rollover_or_inherited"
+    insufficient_data: str = "age_rule_insufficient_data"
+
+
 
 @dataclass(frozen=True)
 class AgeTaxCodeConfig:
@@ -430,5 +449,6 @@ class RothTaxCodeConfig:
 
 
 AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
+MATCH_STATUS_CONFIG = MatchStatusConfig()
 ROTH_TAXABLE_CONFIG = RothTaxableConfig()
 ROTH_TAXCODE_CONFIG = RothTaxCodeConfig()
