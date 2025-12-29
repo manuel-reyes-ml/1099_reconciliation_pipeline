@@ -1,5 +1,5 @@
 # templates/vscode_codex_task_brief.md
-# VS Code Codex Task Brief (Template)
+# VS Code Codex Task Brief
 
 > Purpose: This template is copied into VS Code Codex to execute work safely and predictably.
 > Key control: **No commits and no pushes**. You (human) will review diffs and commit manually.
