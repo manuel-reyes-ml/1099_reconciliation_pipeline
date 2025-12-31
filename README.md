@@ -362,7 +362,7 @@ python -c "import openpyxl; print('✓ openpyxl installed')"
 
 **Sample data defaults (public repo)**
 - Loader functions honor `USE_SAMPLE_DATA_DEFAULT` in `src/config.py` when `path` is omitted.
-- Keep it set to `True` to use `data/sample/`. Regenerate synthetic inputs with `python src/generate_sample_data.py` or run `notebooks/07_generate_sample_data.ipynb`.
+- Keep it set to `True` to use `data/sample/`. Regenerate synthetic inputs from the repo root with `python -m src.generate_sample_data` or run `notebooks/07_generate_sample_data.ipynb`.
 
 #### Option 1: Run Complete Pipeline (Command Line)
 Runs the Engine A inherited-plan workflow using sample data in `data/sample/`.
