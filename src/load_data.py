@@ -72,7 +72,9 @@ import pandas as pd #The main data manipulation library for data tables
 
 # Relative imports from the config module in the same package /src
 from .config import (
+    RAW_DATA_DIR,
     SAMPLE_DIR,
+    USE_SAMPLE_DATA_DEFAULT,
     RELIUS_COLUMN_MAP,
     RELIUS_DEMO_COLUMN_MAP,
     RELIUS_ROTH_BASIS_COLUMN_MAP,
@@ -115,9 +117,9 @@ def _validate_columns(df: pd.DataFrame, required_cols, source_name: str) -> None
 
 
 def load_relius_excel(
-        path: Optional[Path] = None,     # Type hint: "Should be" either a Path object or None / Newer Python: path: Path | None = None
-        use_sample_if_none: bool = True, # If path is None, load sample data
-        sheet_name: Optional[str] = 0,   # Type hint: Which sheet to load from Excel file, default first sheet
+        path: Optional[Path] = None,           # Type hint: "Should be" either a Path object or None / Newer Python: path: Path | None = None
+        use_sample_if_none: bool | None = None, # If path is None, use config default unless overridden
+        sheet_name: Optional[str] = 0,         # Type hint: Which sheet to load from Excel file, default first sheet
 ) -> pd.DataFrame:                       # Returns a pandas DataFrame
     
     """
@@ -126,10 +128,11 @@ def load_relius_excel(
 
     Args:
         path:
-            Path to the Excel file. If None and use_sample_if_none is True,
-            defaults to SAMPLE_DIR / 'relius_sample.xlsx'.
+            Path to the Excel file. If None, uses USE_SAMPLE_DATA_DEFAULT to
+            select SAMPLE_DIR / 'relius_sample.xlsx' or
+            RAW_DATA_DIR / 'real_inherited_relius_2025.xlsx'.
         use_sample_if_none:
-            If True and path is None, loan from the sample  directory.
+            Override for USE_SAMPLE_DATA_DEFAULT when path is None.
         sheet_name:
             Sheet name or index to read (defaults to first sheet).
 
@@ -140,9 +143,12 @@ def load_relius_excel(
 
     # Determine path to load
     if path is None:
-        if not use_sample_if_none:
-            raise ValueError("No path provided and use_sample_if_none=False.")
-        path = SAMPLE_DIR / 'relius_sample.xlsx'
+        if use_sample_if_none is None:
+            use_sample_if_none = USE_SAMPLE_DATA_DEFAULT
+        if use_sample_if_none:
+            path = SAMPLE_DIR / "relius_sample.xlsx"
+        else:
+            path = RAW_DATA_DIR / "real_inherited_relius_2025.xlsx"
 
     path = Path(path)     #Ensure path is a Path object
     if not path.exists(): #Check if file exists
@@ -164,7 +170,7 @@ def load_relius_excel(
 
 def load_relius_roth_basis_excel(
         path: Optional[Path] = None,
-        use_sample_if_none: bool = True,
+        use_sample_if_none: bool | None = None,
         sheet_name: Optional[str] = 0,
 ) -> pd.DataFrame:
 
@@ -174,10 +180,11 @@ def load_relius_roth_basis_excel(
 
     Args:
         path:
-            Path to the Excel file. If None and use_sample_if_none is True,
-            defaults to SAMPLE_DIR / RELIUS_ROTH_BASIS_SAMPLE_FILENAME.
+            Path to the Excel file. If None, uses USE_SAMPLE_DATA_DEFAULT to
+            select SAMPLE_DIR / 'relius_roth_basis_sample.xlsx' or
+            RAW_DATA_DIR / 'real_roth_basis_relius_2025.xlsx'.
         use_sample_if_none:
-            If True and path is None, load from the sample directory.
+            Override for USE_SAMPLE_DATA_DEFAULT when path is None.
         sheet_name:
             Sheet name or index to read (defaults to first sheet).
 
@@ -187,9 +194,12 @@ def load_relius_roth_basis_excel(
     """
 
     if path is None:
-        if not use_sample_if_none:
-            raise ValueError("No path provided and use_sample_if_none=False.")
-        path = SAMPLE_DIR / 'relius_roth_basis_sample.xlsx'
+        if use_sample_if_none is None:
+            use_sample_if_none = USE_SAMPLE_DATA_DEFAULT
+        if use_sample_if_none:
+            path = SAMPLE_DIR / "relius_roth_basis_sample.xlsx"
+        else:
+            path = RAW_DATA_DIR / "real_roth_basis_relius_2025.xlsx"
 
     path = Path(path)
     if not path.exists():
@@ -205,7 +215,7 @@ def load_relius_roth_basis_excel(
 
 def load_relius_demo_excel(
         path: Optional[Path] = None,
-        use_sample_if_none: bool = True,
+        use_sample_if_none: bool | None = None,
         sheet_name: Optional[str] = 0,
 ) -> pd.DataFrame:
 
@@ -215,10 +225,11 @@ def load_relius_demo_excel(
 
     Args:
         path:
-            Path to the Excel file. If None and use_sample_if_none is True,
-            defaults to SAMPLE_DIR / 'relius_demo_sample.xlsx'.
+            Path to the Excel file. If None, uses USE_SAMPLE_DATA_DEFAULT to
+            select SAMPLE_DIR / 'relius_demo_sample.xlsx' or
+            RAW_DATA_DIR / 'real_demo_relius_2025.xlsx'.
         use_sample_if_none:
-            If True and path is None, load from the sample directory.
+            Override for USE_SAMPLE_DATA_DEFAULT when path is None.
         sheet_name:
             Sheet name or index to read (defaults to first sheet).
 
@@ -228,9 +239,12 @@ def load_relius_demo_excel(
     """
 
     if path is None:
-        if not use_sample_if_none:
-            raise ValueError("No path provided and use_sample_if_none=False.")
-        path = SAMPLE_DIR / "relius_demo_sample.xlsx"
+        if use_sample_if_none is None:
+            use_sample_if_none = USE_SAMPLE_DATA_DEFAULT
+        if use_sample_if_none:
+            path = SAMPLE_DIR / "relius_demo_sample.xlsx"
+        else:
+            path = RAW_DATA_DIR / "real_demo_relius_2025.xlsx"
 
     path = Path(path)
     if not path.exists():
@@ -249,7 +263,7 @@ def load_relius_demo_excel(
 
 def load_matrix_excel(
         path: Optional[Path] = None,
-        use_sample_if_none: bool = True,
+        use_sample_if_none: bool | None = None,
         sheet_name: Optional[str] = 0,
 ) -> pd.DataFrame:
     
@@ -259,10 +273,11 @@ def load_matrix_excel(
 
     Args:
         path:
-            Path to the Excel file. If None and use_sample_if_none is True,
-            defaults to SAMPLE_DIR / 'matrix_sample.xlsx'.
+            Path to the Excel file. If None, uses USE_SAMPLE_DATA_DEFAULT to
+            select SAMPLE_DIR / 'matrix_sample.xlsx' or
+            RAW_DATA_DIR / 'real_all_matrix_2025.xlsx'.
         use_sample_if_none:
-            If True and path is None, loan from the sample  directory.
+            Override for USE_SAMPLE_DATA_DEFAULT when path is None.
         sheet_name:
             Sheet name or index to read (defaults to first sheet).
 
@@ -272,9 +287,12 @@ def load_matrix_excel(
     """
 
     if path is None:
-        if not use_sample_if_none:
-            raise ValueError("No path provided and use_sample_if_none=False.")
-        path = SAMPLE_DIR / "matrix_sample.xlsx"
+        if use_sample_if_none is None:
+            use_sample_if_none = USE_SAMPLE_DATA_DEFAULT
+        if use_sample_if_none:
+            path = SAMPLE_DIR / "matrix_sample.xlsx"
+        else:
+            path = RAW_DATA_DIR / "real_all_matrix_2025.xlsx"
 
     path = Path(path)
     if not path.exists():
