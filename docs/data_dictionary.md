@@ -484,9 +484,10 @@ In this public repository:
 - ✅ **Column structures mirror real exports** - Field names, types, relationships are accurate
 - ✅ **Field types and relationships are accurate** - Data model represents production
 - ✅ **Representative patterns** - Synthetic data covers common scenarios
-- ❌ **Values are 100% synthetic** - Generated using Python's Faker library
+- ❌ **Values are 100% synthetic** - Generated with a deterministic Python generator (`src/generate_sample_data.py`)
 - ❌ **SSNs, IDs, plan numbers, amounts are NOT real** - No real participant data
 - ❌ **No real participant data** appears anywhere in this repository
+- ✅ **Regeneratable inputs** - Run `python src/generate_sample_data.py` or `notebooks/07_generate_sample_data.ipynb` to refresh `data/sample/`
 
 ### ⚠️ Important Disclaimers
 
