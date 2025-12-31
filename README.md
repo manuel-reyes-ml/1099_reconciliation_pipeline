@@ -243,16 +243,25 @@ New First Year contrib | Reason | Action
 │
 ├── README.md                           # You are here
 ├── requirements.txt                    # Python dependencies
+├── requirements-dev.txt                # Dev/test dependencies
 ├── .gitignore                          # Excludes real data
 ├── LICENSE                             # MIT License
 │
 ├── data/
 │   ├── sample/                         # Synthetic data (SAFE to share)
-│   │   ├── relius_sample.xlsx         # ~100 sample transactions
 │   │   ├── matrix_sample.xlsx         # ~95 sample disbursements
-│   │   └── .gitkeep
+│   │   ├── relius_demo_sample.xlsx    # Demo extract (DOB/term date)
+│   │   ├── relius_roth_basis_sample.xlsx
+│   │   └── relius_sample.xlsx         # ~100 sample transactions
 │   ├── raw/                            # Real exports (GITIGNORED)
 │   └── processed/                      # Cleaned data (GITIGNORED)
+│
+├── docs/
+│   ├── business_context.md             # Problem narrative
+│   ├── data_dictionary.md              # Field definitions
+│   └── matching_logic.md               # Algorithm documentation
+│
+├── logs/                               # Runtime logs (gitignored)
 │
 ├── src/                                # Core pipeline modules
 │   ├── __init__.py
@@ -265,30 +274,35 @@ New First Year contrib | Reason | Action
 │   ├── clean_matrix.py                 # Matrix cleaning logic
 │   ├── match_transactions.py           # Engine A (inherited matching)
 │   ├── age_taxcode_analysis.py         # Engine B (age-based non-Roth)
+│   ├── age_taxcode_visualization.py    # Engine B charts
+│   ├── export_utils.py                 # Export helpers
+│   ├── generate_sample_data.py         # Synthetic sample generator
 │   ├── roth_taxable_analysis.py        # Engine C (Roth taxable)
 │   └── build_correction_file.py        # Generate Excel output
 │
 ├── notebooks/                          # Analysis walkthrough
-│   ├── 01_data_understanding.ipynb     # EDA on both systems
-│   ├── 02_cleaning_pipeline.ipynb      # Cleaning step-by-step
-│   └── 03_matching_analysis.ipynb      # Matching logic + results
+│   ├── 01_data_understanding.ipynb
+│   ├── 02_cleaning_pipeline.ipynb
+│   ├── 03_match_planid_analysis.ipynb
+│   ├── 04_match_demo_analysis.ipynb
+│   ├── 05_match_roth_basis_analysis.ipynb
+│   ├── 06_age_taxcode_visualization.ipynb
+│   └── 07_generate_sample_data.ipynb
 │
 ├── reports/
-│   ├── figures/                        # Generated charts (gitignored)
-│   │   ├── match_rate_by_plan.png
-│   │   ├── mismatch_types.png
-│   │   └── monthly_trends.png
-│   └── samples/                        # Sample outputs (synthetic)
-│       └── correction_file_sample.xlsx
+│   ├── figures/                        # Generated charts (png)
+│   ├── outputs/                        # Timestamped exports/correction files
+│   └── samples/                        # Timestamped correction samples
+│
+├── templates/
+│   └── 1099r_correct_form.xlsx         # Matrix correction template
 │
 ├── tests/                              # Unit tests (optional)
+│   ├── conftest.py
 │   ├── pipelines/
-│   └── roth_taxable/
-│
-└── docs/
-    ├── business_context.md             # Problem narrative
-    ├── data_dictionary.md              # Field definitions
-    └── matching_logic.md               # Algorithm documentation
+│   ├── roth_taxable/
+│   ├── validators/
+│   └── visualization/
 ```
 
 ---
@@ -379,8 +393,12 @@ jupyter notebook
 # Open notebooks in order:
 # 1. notebooks/01_data_understanding.ipynb
 # 2. notebooks/02_cleaning_pipeline.ipynb
-# 3. notebooks/03_matching_analysis.ipynb
-# (Engine B/C workflows are typically run from notebooks or scripts)
+# 3. notebooks/03_match_planid_analysis.ipynb
+# 4. notebooks/04_match_demo_analysis.ipynb
+# 5. notebooks/05_match_roth_basis_analysis.ipynb
+# 6. notebooks/06_age_taxcode_visualization.ipynb
+# 7. notebooks/07_generate_sample_data.ipynb
+# (Engine B/C workflows are covered in 04-06 or can be run from scripts)
 ```
 
 #### Option 3: Use as Module
