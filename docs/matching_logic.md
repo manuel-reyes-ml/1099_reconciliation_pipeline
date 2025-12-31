@@ -12,6 +12,7 @@ It covers:
 
 > **Note:** Field names in synthetic sample files may differ slightly (snake_case).
 > This document describes the **canonical** fields produced by the pipeline.
+> To regenerate synthetic inputs, run `python src/generate_sample_data.py` or `notebooks/07_generate_sample_data.ipynb`.
 
 ---
 
