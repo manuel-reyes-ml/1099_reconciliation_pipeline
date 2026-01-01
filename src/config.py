@@ -97,6 +97,8 @@ PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
 REPORTS_DIR = BASE_DIR / "reports"
 REPORTS_FIGURES_DIR = REPORTS_DIR / "figures"
+
+# Sample-mode outputs default to reports/samples; production outputs to reports/outputs.
 REPORTS_SAMPLES_DIR = REPORTS_DIR / "samples"
 REPORTS_OUTPUTS_DIR = REPORTS_DIR / "outputs"
 
