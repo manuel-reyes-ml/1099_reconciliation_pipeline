@@ -309,6 +309,9 @@ INHERITED_PLAN_IDS = {
     "300004MBDII",
 }
 
+# Default plan scope for Engine A reconciliation (used when plan_ids is not provided).
+DEFAULT_RECONCILIATION_PLAN_IDS = INHERITED_PLAN_IDS
+
 
 # We store business rules as dictionaries here.
 # A later module (e.g. business_rules.py or inside match_transactions.py) will
@@ -352,7 +355,7 @@ SPECIAL_CODE_RULES = [
 
 # If you ever want to quickly swap between sample data and "real" exports
 # in your notebooks or scripts, you can use this flag as a default.
-USE_SAMPLE_DATA_DEFAULT = True
+USE_SAMPLE_DATA_DEFAULT = False
 
 
 @dataclass(frozen=True)
