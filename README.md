@@ -291,8 +291,8 @@ New First Year contrib | Reason | Action
 │
 ├── reports/
 │   ├── figures/                        # Generated charts (png)
-│   ├── outputs/                        # Timestamped exports/correction files
-│   └── samples/                        # Timestamped correction samples
+│   ├── outputs/                        # Timestamped correction files (production default)
+│   └── samples/                        # Timestamped correction files (sample default)
 │
 ├── templates/
 │   └── 1099r_correct_form.xlsx         # Matrix correction template
@@ -425,14 +425,18 @@ write_correction_file(corrections, "output.xlsx")
 
 ### Expected Output
 
-**Console:**
+**Console (sample mode default):**
 ```bash
 Corrections written to: reports/samples/correction_file_20241208_153045.xlsx
 Total corrections: 6
 ```
 
-**Files Created:**
-- `reports/samples/correction_file_[date].xlsx` - Main deliverable
+Production default uses `reports/outputs/correction_file_[date].xlsx` when `USE_SAMPLE_DATA_DEFAULT=False`.
+
+**Files Created (default output):**
+- `reports/samples/correction_file_[date].xlsx` - Sample mode default
+- `reports/outputs/correction_file_[date].xlsx` - Production mode default
+Explicit `output_path` values override these defaults.
 
 ---
 
