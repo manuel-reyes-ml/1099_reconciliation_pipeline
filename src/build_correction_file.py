@@ -106,7 +106,7 @@ from typing import Iterable, Optional   # These are for type hints.
 
 import pandas as pd
 
-from .config import REPORTS_DIR         # '.' in .config means 'sibling module'.
+from .config import REPORTS_OUTPUTS_DIR, REPORTS_SAMPLES_DIR, USE_SAMPLE_DATA_DEFAULT         # '.' in .config means 'sibling module'.
 
 
 
@@ -287,26 +287,26 @@ def write_correction_file(
             DataFrame from build_correction_dataframe().
         output_path:
             Optional explicit path. If None, a timestamped file will be
-            created under reports/samples/.
+            created under reports/samples/ for sample mode or reports/outputs/
+            for production mode.
 
     Returns:
         Path to the written Excel file.
 
     """
 
-    # Ensure reports/samples directory exists
-    samples_dir = REPORTS_DIR / "samples"
-    samples_dir.mkdir(parents=True, exist_ok=True)                     # Creates directory if it doesn't exist. 
-                                                                       # parents=True -> also create parent directories if needed.
-                                                                       # exis_ok=True -> no error if directory already exists.
-
     # datetime.now()           -> current date and time.
     # strftime("%Y%m%d_%H%M%S) -> format like '20251214_213045'
     if output_path is None:
+        output_dir = REPORTS_SAMPLES_DIR if USE_SAMPLE_DATA_DEFAULT else REPORTS_OUTPUTS_DIR
+        output_dir.mkdir(parents=True, exist_ok=True)                  # Creates directory if it doesn't exist. 
+                                                                       # parents=True -> also create parent directories if needed.
+                                                                       # exis_ok=True -> no error if directory already exists.
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_path = samples_dir / f"correction_file_{timestamp}.xlsx"
+        output_path = output_dir / f"correction_file_{timestamp}.xlsx"
     else:
         output_path = Path(output_path)                                # Conver it to a Path object for consistent handling.
+        output_path.parent.mkdir(parents=True, exist_ok=True)
     
     corrections_df.to_excel(output_path, index=False)                  # Writes the DataDrame to an Excel '.xlsx' file.
                                                                        # index=False -> don't include pandas row index as a separate column.
