@@ -493,6 +493,8 @@ The following status values appear across engine outputs:
 - `plan_id`
 - `action` (may contain multiple lines), `correction_reason`
 
+Default output location for `write_correction_file` follows `USE_SAMPLE_DATA_DEFAULT`: `reports/samples/` in sample mode and `reports/outputs/` in production mode. An explicit `output_path` overrides these defaults.
+
 ---
 
 ## 8. Validation & QA Checklist
