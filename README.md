@@ -273,11 +273,13 @@ New First Year contrib | Reason | Action
 │   ├── clean_relius_roth_basis.py      # Relius Roth basis cleaning
 │   ├── clean_matrix.py                 # Matrix cleaning logic
 │   ├── match_transactions.py           # Engine A (inherited matching)
+│   ├── match_visualization.py          # Engine A charts
 │   ├── age_taxcode_analysis.py         # Engine B (age-based non-Roth)
 │   ├── age_taxcode_visualization.py    # Engine B charts
 │   ├── export_utils.py                 # Export helpers
 │   ├── generate_sample_data.py         # Synthetic sample generator
 │   ├── roth_taxable_analysis.py        # Engine C (Roth taxable)
+│   ├── roth_taxable_visualization.py   # Engine C charts
 │   └── build_correction_file.py        # Generate Excel output
 │
 ├── notebooks/                          # Analysis walkthrough
@@ -287,7 +289,9 @@ New First Year contrib | Reason | Action
 │   ├── 04_match_demo_analysis.ipynb
 │   ├── 05_match_roth_basis_analysis.ipynb
 │   ├── 06_age_taxcode_visualization.ipynb
-│   └── 07_generate_sample_data.ipynb
+│   ├── 07_generate_sample_data.ipynb
+│   ├── 08_engine_a_visualization.ipynb
+│   └── 09_roth_taxable_visualization.ipynb
 │
 ├── reports/
 │   ├── figures/                        # Generated charts (png)
@@ -398,7 +402,9 @@ jupyter notebook
 # 5. notebooks/05_match_roth_basis_analysis.ipynb
 # 6. notebooks/06_age_taxcode_visualization.ipynb
 # 7. notebooks/07_generate_sample_data.ipynb
-# (Engine B/C workflows are covered in 04-06 or can be run from scripts)
+# 8. notebooks/08_engine_a_visualization.ipynb
+# 9. notebooks/09_roth_taxable_visualization.ipynb
+# (Engine B/C workflows are covered in 04-06 and 08-09 or can be run from scripts)
 ```
 
 #### Option 3: Use as Module
