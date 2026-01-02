@@ -378,20 +378,28 @@ def plot_roth_correction_reason_trends(
         .sort_index()
     )
 
-    for reason in data.columns:
+    reasons = list(data.columns)
+    color_map = plt.get_cmap("tab20", max(len(reasons), 1))
+    for idx, reason in enumerate(reasons):
         ax.plot(
             pd.to_datetime(data.index),
             data[reason].astype(int),
             marker="o",
             linewidth=2,
+            color=color_map(idx),
             label=str(reason),
         )
 
     ax.set_xlabel("Transaction Month")
     ax.set_ylabel("Count")
     ax.set_title("Engine C Correction Reasons Over Time")
-    ax.legend(loc="best")
+    ax.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0,
+    )
     fig.autofmt_xdate()
+    fig.subplots_adjust(right=0.75)
 
     return fig, ax
 
