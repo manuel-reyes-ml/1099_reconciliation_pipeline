@@ -12,7 +12,7 @@ It covers:
 
 > **Note:** Field names in synthetic sample files may differ slightly (snake_case).
 > This document describes the **canonical** fields produced by the pipeline.
-> To regenerate synthetic inputs from the repo root, run `python -m src.generate_sample_data` or `notebooks/07_generate_sample_data.ipynb`.
+> To regenerate synthetic inputs from the repo root, run `python -m src.generate_sample_data` or `notebooks/00_generate_sample_data.ipynb`.
 
 ---
 
@@ -69,7 +69,7 @@ For quick orientation, these are the most impactful rules:
                 └──────────── Engine A (Reconcile) ───────┘
                                   │
                                   ▼
-                        match_transactions.py
+                        match_planid.py
                         (reconcile_relius_matrix)
                                   │
                                   ▼

@@ -5,7 +5,7 @@ build_correction_file.py
 Generate an Excel-ready 1099 correction dataset for Matrix from analysis outputs.
 
 This module converts an "analysis results" DataFrame (produced by either:
-- the inherited-plan reconciliation engine in `match_transactions.py`, or
+- the inherited-plan reconciliation engine in `match_planid.py`, or
 - the age-based correction engine in `age_taxcode_analysis.py`)
 into a standardized correction DataFrame and writes it to an Excel file.
 
@@ -76,7 +76,7 @@ Example: inherited-plan reconciliation output -> correction file
 
     from src.build_correction_file import build_correction_dataframe, write_correction_file
 
-    # primary_matches is the filtered, in-tolerance result from match_transactions
+    # primary_matches is the filtered, in-tolerance result from match_planid
     corrections_df = build_correction_dataframe(primary_matches)
     output_path = write_correction_file(corrections_df)
 
@@ -340,7 +340,7 @@ def main() -> None:
     from .load_data import load_relius_excel, load_matrix_excel
     from .clean_relius import clean_relius
     from .clean_matrix import clean_matrix
-    from .match_transactions import reconcile_relius_matrix
+    from .match_planid import reconcile_relius_matrix
 
 
 

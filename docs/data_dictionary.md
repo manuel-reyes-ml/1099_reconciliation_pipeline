@@ -487,7 +487,7 @@ In this public repository:
 - ❌ **Values are 100% synthetic** - Generated with a deterministic Python generator (`python -m src.generate_sample_data` from the repo root)
 - ❌ **SSNs, IDs, plan numbers, amounts are NOT real** - No real participant data
 - ❌ **No real participant data** appears anywhere in this repository
-- ✅ **Regeneratable inputs** - Run `python -m src.generate_sample_data` from the repo root or `notebooks/07_generate_sample_data.ipynb` to refresh `data/sample/`
+- ✅ **Regeneratable inputs** - Run `python -m src.generate_sample_data` from the repo root or `notebooks/00_generate_sample_data.ipynb` to refresh `data/sample/`
 
 ### ⚠️ Important Disclaimers
 

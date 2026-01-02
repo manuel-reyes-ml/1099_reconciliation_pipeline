@@ -7,7 +7,7 @@ Cleaning and normalization for Matrix distribution export data.
 This module reads a Matrix Excel export and transforms it into a canonical,
 analysis-ready pandas DataFrame that can be used by:
 
-- The inherited-plan reconciliation engine (`match_transactions.py`)
+- The inherited-plan reconciliation engine (`match_planid.py`)
 - The age-based tax-code engine (`age_taxcode_analysis.py`)
 - Downstream reporting / correction file generation (`build_correction_file.py`)
 

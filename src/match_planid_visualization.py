@@ -1,7 +1,7 @@
 """
 match_visualization.py
 
-Helpers for summarizing and visualizing Engine A (match_transactions) output.
+Helpers for summarizing and visualizing Engine A (match_planid) output.
 """
 
 from __future__ import annotations

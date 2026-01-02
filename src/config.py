@@ -314,10 +314,10 @@ DEFAULT_RECONCILIATION_PLAN_IDS = INHERITED_PLAN_IDS
 
 
 # We store business rules as dictionaries here.
-# A later module (e.g. business_rules.py or inside match_transactions.py) will
+# A later module (e.g. business_rules.py or inside match_planid.py) will
 # interpret and apply these to the matched DataFrame.
 
-""" --- Add Inherited Business Rules Config to match_transactions later on -----
+""" --- Add Inherited Business Rules Config to match_planid later on -----
 SPECIAL_CODE_RULES = [
     {
         # For inherited plans, a final distribution coded as 7M
