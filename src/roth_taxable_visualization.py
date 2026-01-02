@@ -279,6 +279,123 @@ def plot_roth_correction_reason_summary(
     return fig, ax
 
 
+def build_roth_correction_reason_trends(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build month-over-month counts by correction_reason.
+
+    Required columns:
+      - match_status
+      - correction_reason
+      - txn_date
+    """
+
+    _validate_required_columns(df, ["match_status", "correction_reason", "txn_date"])
+
+    columns = ["txn_month", "correction_reason", "count"]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    relevant = df["match_status"].isin(
+        [STATUS_CFG.needs_correction, STATUS_CFG.needs_review]
+    )
+    working = df[relevant].copy()
+    if working.empty:
+        return pd.DataFrame(columns=columns)
+
+    txn_dt = pd.to_datetime(working["txn_date"], errors="coerce")
+    invalid_count = int(txn_dt.isna().sum())
+    if invalid_count:
+        raise ValueError(
+            f"Found {invalid_count} rows with missing or malformed txn_date."
+        )
+
+    working["txn_month"] = txn_dt.dt.to_period("M").dt.to_timestamp()
+    reason_df = working.loc[
+        working["correction_reason"].notna(), ["txn_month", "correction_reason"]
+    ].copy()
+
+    if reason_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    bullet = ROTH_CFG.reason_bullet.strip()
+
+    def _split_reasons(value: object) -> list[str]:
+        text = str(value)
+        parts = [part.strip() for part in text.splitlines() if part.strip()]
+        cleaned = []
+        for part in parts:
+            if bullet and part.startswith(bullet):
+                cleaned.append(part[len(bullet):].strip())
+            else:
+                cleaned.append(part)
+        return [part for part in cleaned if part]
+
+    reason_df["correction_reason"] = reason_df["correction_reason"].apply(
+        _split_reasons
+    )
+    exploded = reason_df.explode("correction_reason")
+    exploded = exploded.dropna(subset=["correction_reason"])
+    exploded = exploded[exploded["correction_reason"].astype(str) != ""]
+
+    if exploded.empty:
+        return pd.DataFrame(columns=columns)
+
+    metrics = (
+        exploded.groupby(["txn_month", "correction_reason"], dropna=False)
+        .size()
+        .reset_index(name="count")
+        .sort_values(["txn_month", "count"], ascending=[True, False])
+    )
+
+    return metrics[columns]
+
+
+def plot_roth_correction_reason_trends(
+    metrics_df: pd.DataFrame,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot month-over-month correction_reason trends.
+    """
+
+    _validate_required_columns(
+        metrics_df, ["txn_month", "correction_reason", "count"]
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    if metrics_df.empty:
+        ax.text(0.5, 0.5, "No data available", ha="center", va="center")
+        ax.set_axis_off()
+        return fig, ax
+
+    data = (
+        metrics_df.pivot_table(
+            index="txn_month",
+            columns="correction_reason",
+            values="count",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .sort_index()
+    )
+
+    for reason in data.columns:
+        ax.plot(
+            pd.to_datetime(data.index),
+            data[reason].astype(int),
+            marker="o",
+            linewidth=2,
+            label=str(reason),
+        )
+
+    ax.set_xlabel("Transaction Month")
+    ax.set_ylabel("Count")
+    ax.set_title("Engine C Correction Reasons Over Time")
+    ax.legend(loc="best")
+    fig.autofmt_xdate()
+
+    return fig, ax
+
+
 def build_taxable_delta_distribution(df: pd.DataFrame) -> pd.DataFrame:
     """
     Build a taxable amount delta distribution (suggested - current).

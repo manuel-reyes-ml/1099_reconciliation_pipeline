@@ -329,3 +329,93 @@ def plot_correction_reason_summary(
         )
 
     return fig, ax
+
+
+def build_correction_reason_trends(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build month-over-month counts by correction_reason.
+
+    Required columns:
+      - match_status
+      - correction_reason
+      - txn_date
+    """
+
+    _validate_required_columns(df, ["match_status", "correction_reason", "txn_date"])
+
+    columns = ["txn_month", "correction_reason", "count"]
+    if df.empty:
+        return pd.DataFrame(columns=columns)
+
+    corrections = df[df["match_status"] == STATUS_CFG.needs_correction].copy()
+    if corrections.empty:
+        return pd.DataFrame(columns=columns)
+
+    txn_dt = pd.to_datetime(corrections["txn_date"], errors="coerce")
+    invalid_count = int(txn_dt.isna().sum())
+    if invalid_count:
+        raise ValueError(
+            f"Found {invalid_count} rows with missing or malformed txn_date."
+        )
+
+    corrections["txn_month"] = txn_dt.dt.to_period("M").dt.to_timestamp()
+    corrections["correction_reason"] = (
+        corrections["correction_reason"]
+        .fillna("Unknown")
+        .astype("string")
+    )
+
+    metrics = (
+        corrections.groupby(["txn_month", "correction_reason"], dropna=False)
+        .size()
+        .reset_index(name="count")
+        .sort_values(["txn_month", "count"], ascending=[True, False])
+    )
+
+    return metrics[columns]
+
+
+def plot_correction_reason_trends(
+    metrics_df: pd.DataFrame,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot month-over-month correction_reason trends.
+    """
+
+    _validate_required_columns(
+        metrics_df, ["txn_month", "correction_reason", "count"]
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    if metrics_df.empty:
+        ax.text(0.5, 0.5, "No data available", ha="center", va="center")
+        ax.set_axis_off()
+        return fig, ax
+
+    data = (
+        metrics_df.pivot_table(
+            index="txn_month",
+            columns="correction_reason",
+            values="count",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .sort_index()
+    )
+
+    for reason in data.columns:
+        ax.plot(
+            pd.to_datetime(data.index),
+            data[reason].astype(int),
+            marker="o",
+            linewidth=2,
+            label=str(reason),
+        )
+
+    ax.set_xlabel("Transaction Month")
+    ax.set_ylabel("Count")
+    ax.set_title("Engine A Correction Reasons Over Time")
+    ax.legend(loc="best")
+    fig.autofmt_xdate()
+
+    return fig, ax
