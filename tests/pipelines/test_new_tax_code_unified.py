@@ -2,12 +2,12 @@ import pandas as pd
 
 from src.age_taxcode_analysis import run_age_taxcode_analysis
 from src.build_correction_file import build_correction_dataframe
-from src.match_transactions import reconcile_relius_matrix
+from src.match_planid import reconcile_relius_matrix
 from src.roth_taxable_analysis import run_roth_taxable_analysis
 
 
 # Engine A
-def test_match_transactions_sets_new_tax_code() -> None:
+def test_match_planid_sets_new_tax_code() -> None:
     relius_df = pd.DataFrame(
         {
             "plan_id": ["300004PLAT"],
@@ -34,7 +34,7 @@ def test_match_transactions_sets_new_tax_code() -> None:
     assert result.loc[0, "new_tax_code"] == "4G"
 
 
-def test_match_transactions_no_action_clears_suggested_codes() -> None:
+def test_match_planid_no_action_clears_suggested_codes() -> None:
     relius_df = pd.DataFrame(
         {
             "plan_id": ["300004PLAT"],
