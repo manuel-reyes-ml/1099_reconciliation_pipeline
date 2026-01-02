@@ -7,7 +7,7 @@ Cleaning and normalization for Relius distribution export data.
 This module reads a Relius Excel export (typically a high-column-count operational
 report) and transforms it into a canonical, analysis-ready pandas DataFrame used by:
 
-- The inherited-plan reconciliation engine (`match_transactions.py`)
+- The inherited-plan reconciliation engine (`match_planid.py`)
 - Downstream correction-file generation (`build_correction_file.py`)
 - Optional analytics / reporting notebooks (EDA, match-rate KPIs)
 

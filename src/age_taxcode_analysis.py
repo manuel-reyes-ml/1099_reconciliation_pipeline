@@ -13,7 +13,7 @@ export (DOB, termination date by plan, participant identifiers).
 Design goals
 ------------
 - Operate independently from the inherited-plan matching engine
-  (`match_transactions.py`) so the two workflows can be run separately.
+  (`match_planid.py`) so the two workflows can be run separately.
 - Reuse the existing correction-file builder (`build_correction_file.py`) by
   producing a DataFrame that contains:
     - match_status (e.g., "match_needs_correction")
