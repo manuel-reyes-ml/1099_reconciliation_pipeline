@@ -336,7 +336,7 @@ def main() -> None:
 
     # These imports are inside main() so that importing the module doesn't automatically import everything;
     #  they only needed when you run the pipeline.
-    from .config import RAW_DATA_DIR, INHERITED_PLAN_IDS
+    from .config import RAW_DATA_DIR, DEFAULT_RECONCILIATION_PLAN_IDS
     from .load_data import load_relius_excel, load_matrix_excel
     from .clean_relius import clean_relius
     from .clean_matrix import clean_matrix
@@ -361,7 +361,7 @@ def main() -> None:
     matched = reconcile_relius_matrix(
         relius_clean,
         matrix_clean,
-        plan_ids=INHERITED_PLAN_IDS,  # focus on inherited plans by default
+        plan_ids=DEFAULT_RECONCILIATION_PLAN_IDS,  # default plan scope
         apply_business_rules=True,
     )
 

@@ -422,6 +422,7 @@ relius_clean = clean_relius(relius_raw)
 matrix_clean = clean_matrix(matrix_raw)
 
 # Engine A matching
+# Default plan scope uses DEFAULT_RECONCILIATION_PLAN_IDS unless plan_ids is provided.
 matches = reconcile_relius_matrix(relius_clean, matrix_clean)
 corrections = build_correction_dataframe(matches)
 write_correction_file(corrections, "output.xlsx")
