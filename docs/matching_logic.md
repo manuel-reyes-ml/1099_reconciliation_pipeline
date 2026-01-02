@@ -69,7 +69,7 @@ For quick orientation, these are the most impactful rules:
                 └──────────── Engine A (Reconcile) ───────┘
                                   │
                                   ▼
-                        match_transactions.py
+                        match_planid.py
                         (reconcile_relius_matrix)
                                   │
                                   ▼
