@@ -114,6 +114,7 @@ from .config import (
     INHERITED_PLAN_IDS,    # A collecion (Set) of plan IDs that are considered "inherited".
     MATCH_STATUS_CONFIG,
     MATCHING_CONFIG,       # A dataclass instance with parameters such as max_date_lag_days.
+    DEFAULT_RECONCILIATION_PLAN_IDS,
 )
 
 
@@ -300,6 +301,8 @@ def reconcile_relius_matrix(
     # Then the r[r[..]] filters and keep only the rows where True was returned
     # .copy() creates a copy of the DataFrame to be assigned to 'r' and 'm' in the next line
     # This allows you to reconcile only a subset of plans (e.g. inherited plans) without changing the matching logic
+    if plan_ids is None:
+        plan_ids = DEFAULT_RECONCILIATION_PLAN_IDS
     if plan_ids is not None:
         plan_ids = set(plan_ids)
         r = r[r["plan_id"].isin(plan_ids)].copy()
