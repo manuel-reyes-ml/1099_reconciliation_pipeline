@@ -284,15 +284,15 @@ New First Year contrib | Reason | Action
 │   └── build_correction_file.py        # Generate Excel output
 │
 ├── notebooks/                          # Analysis walkthrough
+│   ├── 00_generate_sample_data.ipynb
 │   ├── 01_data_understanding.ipynb
 │   ├── 02_cleaning_pipeline.ipynb
 │   ├── 03_match_planid_analysis.ipynb
 │   ├── 04_match_demo_analysis.ipynb
 │   ├── 05_match_roth_basis_analysis.ipynb
 │   ├── 06_age_taxcode_visualization.ipynb
-│   ├── 07_generate_sample_data.ipynb
-│   ├── 08_engine_a_visualization.ipynb
-│   └── 09_roth_taxable_visualization.ipynb
+│   ├── 07_match_planid_visualization.ipynb
+│   └── 08_roth_taxable_visualization.ipynb
 │
 ├── reports/
 │   ├── figures/                        # Generated charts (png)
@@ -381,7 +381,7 @@ python -c "import openpyxl; print('✓ openpyxl installed')"
 
 **Sample data defaults (public repo)**
 - Loader functions honor `USE_SAMPLE_DATA_DEFAULT` in `src/config.py` when `path` is omitted.
-- Keep it set to `True` to use `data/sample/`. Regenerate synthetic inputs from the repo root with `python -m src.generate_sample_data` or run `notebooks/07_generate_sample_data.ipynb`.
+- Keep it set to `True` to use `data/sample/`. Regenerate synthetic inputs from the repo root with `python -m src.generate_sample_data` or run `notebooks/00_generate_sample_data.ipynb`.
 
 #### Option 1: Run Complete Pipeline (Command Line)
 Runs the Engine A inherited-plan workflow using sample data in `data/sample/`.
@@ -396,16 +396,16 @@ python -m src.build_correction_file
 jupyter notebook
 
 # Open notebooks in order:
-# 1. notebooks/01_data_understanding.ipynb
-# 2. notebooks/02_cleaning_pipeline.ipynb
-# 3. notebooks/03_match_planid_analysis.ipynb
-# 4. notebooks/04_match_demo_analysis.ipynb
-# 5. notebooks/05_match_roth_basis_analysis.ipynb
-# 6. notebooks/06_age_taxcode_visualization.ipynb
-# 7. notebooks/07_generate_sample_data.ipynb
-# 8. notebooks/08_engine_a_visualization.ipynb
-# 9. notebooks/09_roth_taxable_visualization.ipynb
-# (Engine B/C workflows are covered in 04-06 and 08-09 or can be run from scripts)
+# 1. notebooks/00_generate_sample_data.ipynb
+# 2. notebooks/01_data_understanding.ipynb
+# 3. notebooks/02_cleaning_pipeline.ipynb
+# 4. notebooks/03_match_planid_analysis.ipynb
+# 5. notebooks/04_match_demo_analysis.ipynb
+# 6. notebooks/05_match_roth_basis_analysis.ipynb
+# 7. notebooks/06_age_taxcode_visualization.ipynb
+# 8. notebooks/07_match_planid_visualization.ipynb
+# 9. notebooks/08_roth_taxable_visualization.ipynb
+# (Engine B/C workflows are covered in 04-06 and 07-08 or can be run from scripts)
 ```
 
 #### Option 3: Use as Module
