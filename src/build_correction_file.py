@@ -106,7 +106,13 @@ from typing import Iterable, Optional   # These are for type hints.
 
 import pandas as pd
 
-from .config import REPORTS_OUTPUTS_DIR, REPORTS_SAMPLES_DIR, USE_SAMPLE_DATA_DEFAULT         # '.' in .config means 'sibling module'.
+from .config import (
+    REPORTS_OUTPUTS_DIR,
+    REPORTS_SAMPLES_DIR,
+    USE_SAMPLE_DATA_DEFAULT,
+    get_engine_outputs_dir,
+    get_engine_samples_dir,
+)         # '.' in .config means 'sibling module'.
 
 
 
@@ -276,6 +282,7 @@ def build_correction_dataframe(
 def write_correction_file(
         corrections_df: pd.DataFrame,
         output_path: Optional[Path | str] = None,
+        engine: str | None = None,
 ) -> Path:
     
     """
@@ -289,6 +296,10 @@ def write_correction_file(
             Optional explicit path. If None, a timestamped file will be
             created under reports/samples/ for sample mode or reports/outputs/
             for production mode.
+        engine:
+            Optional engine name (e.g., match_planid, age_taxcode, roth_taxable).
+            When output_path is None, routes output into engine-specific
+            subdirectories.
 
     Returns:
         Path to the written Excel file.
@@ -298,7 +309,14 @@ def write_correction_file(
     # datetime.now()           -> current date and time.
     # strftime("%Y%m%d_%H%M%S) -> format like '20251214_213045'
     if output_path is None:
-        output_dir = REPORTS_SAMPLES_DIR if USE_SAMPLE_DATA_DEFAULT else REPORTS_OUTPUTS_DIR
+        if engine is None:
+            output_dir = REPORTS_SAMPLES_DIR if USE_SAMPLE_DATA_DEFAULT else REPORTS_OUTPUTS_DIR
+        else:
+            output_dir = (
+                get_engine_samples_dir(engine)
+                if USE_SAMPLE_DATA_DEFAULT
+                else get_engine_outputs_dir(engine)
+            )
         output_dir.mkdir(parents=True, exist_ok=True)                  # Creates directory if it doesn't exist. 
                                                                        # parents=True -> also create parent directories if needed.
                                                                        # exis_ok=True -> no error if directory already exists.
