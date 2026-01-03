@@ -110,7 +110,7 @@ Build an automated **1099 reconciliation pipeline** that:
    - Engine B: age-based non-Roth tax codes
    - Engine C: Roth taxable + Roth tax-code logic
 4. **Classifies** results into match statuses and correction/review actions.
-5. **Generates** an **Excel correction file** with recommended updates, stored under `reports/samples/` for sample runs and `reports/outputs/` for production runs by default.
+5. **Generates** an **Excel correction file** with recommended updates, stored under `reports/samples/<engine>/` for sample runs and `reports/outputs/<engine>/` for production runs by default.
 
 ---
 

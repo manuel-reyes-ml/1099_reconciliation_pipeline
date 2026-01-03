@@ -445,7 +445,7 @@ dropping records:
 
 ## 4. Correction File Fields
 
-The final correction Excel file (e.g. `reports/samples/correction_file_YYYYMMDD_HHMMSS.xlsx` in sample mode or `reports/outputs/correction_file_YYYYMMDD_HHMMSS.xlsx` in production mode) includes a curated set of fields designed for the **operations team**.
+The final correction Excel file (e.g. `reports/samples/<engine>/correction_file_YYYYMMDD_HHMMSS.xlsx` in sample mode or `reports/outputs/<engine>/correction_file_YYYYMMDD_HHMMSS.xlsx` in production mode) includes a curated set of fields designed for the **operations team**.
 
 | Column Name | Type | Example | Description |
 |-------------|------|---------|-------------|
