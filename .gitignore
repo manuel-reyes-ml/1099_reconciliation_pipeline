@@ -18,6 +18,7 @@
 !data/sample/README.md
 
 # Real output files (may contain sensitive info)
+reports/outputs/*.xlsx
 reports/outputs/age_taxcode/*.xlsx
 reports/outputs/match_planid/*.xlsx
 reports/outputs/roth_taxable/*.xlsx
@@ -133,6 +134,7 @@ logs/
 *.log.*
 
 # Generated figures (recreated by scripts)
+reports/figures/*.png
 reports/figures/age_taxcode/*.png
 reports/figures/match_planid/*.png
 reports/figures/roth_taxable/*.png
