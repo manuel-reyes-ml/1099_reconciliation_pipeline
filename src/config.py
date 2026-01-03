@@ -389,7 +389,7 @@ SPECIAL_CODE_RULES = [
 
 # If you ever want to quickly swap between sample data and "real" exports
 # in your notebooks or scripts, you can use this flag as a default.
-USE_SAMPLE_DATA_DEFAULT = False
+USE_SAMPLE_DATA_DEFAULT = True
 
 
 @dataclass(frozen=True)
