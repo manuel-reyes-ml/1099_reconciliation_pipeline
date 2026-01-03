@@ -102,6 +102,36 @@ REPORTS_FIGURES_DIR = REPORTS_DIR / "figures"
 REPORTS_SAMPLES_DIR = REPORTS_DIR / "samples"
 REPORTS_OUTPUTS_DIR = REPORTS_DIR / "outputs"
 
+REPORT_ENGINE_NAMES = ("match_planid", "age_taxcode", "roth_taxable")
+
+
+def normalize_engine_name(engine: str | None) -> str | None:
+    if engine is None:
+        return None
+    engine_name = str(engine).strip().lower()
+    return engine_name if engine_name in REPORT_ENGINE_NAMES else None
+
+
+def get_engine_report_dir(engine: str, base_dir: Path) -> Path:
+    engine_name = normalize_engine_name(engine)
+    if engine_name is None:
+        raise ValueError(
+            f"Unknown engine: {engine!r}. Expected one of: {', '.join(REPORT_ENGINE_NAMES)}"
+        )
+    return base_dir / engine_name
+
+
+def get_engine_outputs_dir(engine: str) -> Path:
+    return get_engine_report_dir(engine, REPORTS_OUTPUTS_DIR)
+
+
+def get_engine_samples_dir(engine: str) -> Path:
+    return get_engine_report_dir(engine, REPORTS_SAMPLES_DIR)
+
+
+def get_engine_figures_dir(engine: str) -> Path:
+    return get_engine_report_dir(engine, REPORTS_FIGURES_DIR)
+
 LOGS_DIR = BASE_DIR / "logs"
 
 # Ensure key folders exist when running locally (safe no-op if they exist)
@@ -113,7 +143,11 @@ for _path in [
     REPORTS_DIR,
     REPORTS_FIGURES_DIR,
     REPORTS_SAMPLES_DIR,
+    REPORTS_OUTPUTS_DIR,
     LOGS_DIR,
+    *[REPORTS_OUTPUTS_DIR / engine for engine in REPORT_ENGINE_NAMES],
+    *[REPORTS_SAMPLES_DIR / engine for engine in REPORT_ENGINE_NAMES],
+    *[REPORTS_FIGURES_DIR / engine for engine in REPORT_ENGINE_NAMES],
 ]:
     _path.mkdir(parents=True, exist_ok=True)
     #Make directory:
@@ -355,7 +389,7 @@ SPECIAL_CODE_RULES = [
 
 # If you ever want to quickly swap between sample data and "real" exports
 # in your notebooks or scripts, you can use this flag as a default.
-USE_SAMPLE_DATA_DEFAULT = True
+USE_SAMPLE_DATA_DEFAULT = False
 
 
 @dataclass(frozen=True)
