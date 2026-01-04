@@ -274,7 +274,7 @@ New First Year contrib | Reason | Action
 │   ├── clean_relius_roth_basis.py      # Relius Roth basis cleaning
 │   ├── clean_matrix.py                 # Matrix cleaning logic
 │   ├── match_planid.py                 # Engine A (inherited matching)
-│   ├── match_visualization.py          # Engine A charts
+│   ├── match_planid_visualization.py   # Engine A charts
 │   ├── age_taxcode_analysis.py         # Engine B (age-based non-Roth)
 │   ├── age_taxcode_visualization.py    # Engine B charts
 │   ├── export_utils.py                 # Export helpers
@@ -296,8 +296,17 @@ New First Year contrib | Reason | Action
 │
 ├── reports/
 │   ├── figures/                        # Generated charts (png)
+│   │   ├── match_planid/
+│   │   ├── age_taxcode/
+│   │   └── roth_taxable/
 │   ├── outputs/                        # Timestamped correction files (production default)
+│   │   ├── match_planid/
+│   │   ├── age_taxcode/
+│   │   └── roth_taxable/
 │   └── samples/                        # Timestamped correction files (sample default)
+│       ├── match_planid/
+│       ├── age_taxcode/
+│       └── roth_taxable/
 │
 ├── templates/
 │   └── 1099r_correct_form.xlsx         # Matrix correction template
@@ -415,6 +424,7 @@ from src.clean_relius import clean_relius
 from src.clean_matrix import clean_matrix
 from src.match_planid import reconcile_relius_matrix
 from src.build_correction_file import build_correction_dataframe, write_correction_file
+from src.export_utils import write_df_excel
 
 # Load and clean
 relius_raw = load_relius_excel("data/sample/relius_sample.xlsx")
@@ -427,6 +437,10 @@ matrix_clean = clean_matrix(matrix_raw)
 matches = reconcile_relius_matrix(relius_clean, matrix_clean)
 corrections = build_correction_dataframe(matches)
 write_correction_file(corrections, "output.xlsx")
+write_correction_file(corrections, engine="match_planid")
+
+# Optional: ad-hoc exports (engine-aware output directory)
+write_df_excel(corrections, filename_prefix="match_planid_export", engine="match_planid")
 ```
 
 ---
@@ -435,16 +449,17 @@ write_correction_file(corrections, "output.xlsx")
 
 **Console (sample mode default):**
 ```bash
-Corrections written to: reports/samples/correction_file_20241208_153045.xlsx
+Corrections written to: reports/samples/match_planid/correction_file_20241208_153045.xlsx
 Total corrections: 6
 ```
 
-Production default uses `reports/outputs/correction_file_[date].xlsx` when `USE_SAMPLE_DATA_DEFAULT=False`.
+Production default uses `reports/outputs/<engine>/correction_file_[date].xlsx` when `USE_SAMPLE_DATA_DEFAULT=False` and an engine is provided.
 
 **Files Created (default output):**
-- `reports/samples/correction_file_[date].xlsx` - Sample mode default
-- `reports/outputs/correction_file_[date].xlsx` - Production mode default
-Explicit `output_path` values override these defaults.
+- `reports/samples/<engine>/correction_file_[date].xlsx` - Sample mode default
+- `reports/outputs/<engine>/correction_file_[date].xlsx` - Production mode default
+If `engine` is omitted, outputs stay under `reports/samples/` or `reports/outputs/`. Explicit `output_path` values override these defaults.
+`write_df_excel(..., engine="<engine>")` writes to `reports/outputs/<engine>/` by default.
 
 ---
 
@@ -625,4 +640,4 @@ I'm **Manuel Reyes**, transitioning into data science after 6 years in trading a
 
 ---
 
-*Last updated: December 2025*
+*Last updated: January 2026*

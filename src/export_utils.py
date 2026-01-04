@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .config import REPORTS_DIR
+from .config import REPORTS_DIR, get_engine_outputs_dir
 
 
 EXCEL_SHEETNAME_LIMIT = 31
@@ -66,6 +66,7 @@ def write_df_excel(
     output_path: Path | str | None = None,
     *,
     out_dir: Path | str = REPORTS_DIR / "outputs",
+    engine: str | None = None,
     filename_prefix: str = "export",
     sheet_name: str = "data",
     index: bool = False,
@@ -73,11 +74,12 @@ def write_df_excel(
     """
     Write a DataFrame to a single-sheet Excel file and return the output path.
 
-    If output_path is None, a timestamped file is created under out_dir with the
-    prefix filename_prefix.
+    If output_path is None, a timestamped file is created under out_dir (or the
+    engine-specific outputs directory when engine is provided) with the prefix
+    filename_prefix.
     """
     if output_path is None:
-        out_dir_path = Path(out_dir)
+        out_dir_path = get_engine_outputs_dir(engine) if engine is not None else Path(out_dir)
         output_path = out_dir_path / _timestamped_filename(filename_prefix)
     path = Path(output_path)
     _ensure_parent_dir(path)
