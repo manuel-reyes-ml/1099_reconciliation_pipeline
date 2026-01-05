@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import argparse
 import random
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
+from faker import Faker
 
 from src.config import (
     INHERITED_PLAN_IDS,
@@ -40,12 +42,94 @@ def _transaction_id(rng: random.Random) -> int:
     return int(f"{base}0")
 
 
-def _build_base_transactions(rng: random.Random) -> list[dict[str, object]]:
+def _build_base_transactions(rng: random.Random, faker: Faker) -> list[dict[str, object]]:
     inherited_plan_ids = sorted(INHERITED_PLAN_IDS)
     inherited_primary = inherited_plan_ids[-1] if inherited_plan_ids else "300004PLAT"
     inherited_secondary = inherited_plan_ids[0] if inherited_plan_ids else "300004MBD"
 
-    base = [
+    plan_ids = sorted({*INHERITED_PLAN_IDS, "400001ABC", "300005R"})
+    roth_plan_ids = ["300005R"]
+    non_roth_plan_ids = [plan_id for plan_id in plan_ids if plan_id not in roth_plan_ids]
+
+    distribution_options = [
+        {
+            "dist_name": "Rollover",
+            "dist_code_1": "7",
+            "tax_code_1": "7",
+            "tax_code_2": "G",
+            "dist_type": "Rollover",
+            "gross_low": 12000,
+            "gross_high": 18000,
+        },
+        {
+            "dist_name": "Cash Distribution",
+            "dist_code_1": "1",
+            "tax_code_1": "1",
+            "tax_code_2": None,
+            "dist_type": "Cash",
+            "gross_low": 4000,
+            "gross_high": 9000,
+        },
+        {
+            "dist_name": "Roth Distribution",
+            "dist_code_1": "B",
+            "tax_code_1": "B",
+            "tax_code_2": "G",
+            "dist_type": "Roth",
+            "gross_low": 9000,
+            "gross_high": 15000,
+        },
+    ]
+
+    txn_methods = ["ACH", "Wire", "Check", "Account Transfer"]
+    reserved_ssns = {"111223333", "222334444", "333445555", "444556666"}
+    used_ssns = set(reserved_ssns)
+
+    base: list[dict[str, object]] = []
+    for _ in range(100):
+        dist = rng.choice(distribution_options)
+        if dist["dist_type"] == "Roth":
+            plan_id = rng.choice(roth_plan_ids)
+            roth_year = rng.randint(2005, 2020)
+        else:
+            plan_id = rng.choice(non_roth_plan_ids)
+            roth_year = None
+
+        ssn = f"{rng.randint(100000000, 999999999)}"
+        while ssn in used_ssns:
+            ssn = f"{rng.randint(100000000, 999999999)}"
+        used_ssns.add(ssn)
+
+        exported_date = faker.date_between_dates(
+            date_start=date(2024, 1, 1),
+            date_end=date(2024, 12, 15),
+        )
+        txn_date = exported_date + timedelta(days=rng.randint(0, 10))
+
+        base.append(
+            {
+                "plan_id": plan_id,
+                "ssn": ssn,
+                "first_name": faker.first_name(),
+                "last_name": faker.last_name(),
+                "state": faker.state_abbr(),
+                "gross_amt": _amount(rng, dist["gross_low"], dist["gross_high"]),
+                "exported_date": exported_date.isoformat(),
+                "txn_date": txn_date.isoformat(),
+                "tax_year": exported_date.year,
+                "dist_name": dist["dist_name"],
+                "dist_code_1": dist["dist_code_1"],
+                "tax_code_1": dist["tax_code_1"],
+                "tax_code_2": dist["tax_code_2"],
+                "tax_form": "1099-R",
+                "dist_type": dist["dist_type"],
+                "txn_method": rng.choice(txn_methods),
+                "roth_initial_contribution_year": roth_year,
+            }
+        )
+
+    base.extend(
+        [
         {
             "plan_id": inherited_primary,
             "ssn": "111223333",
@@ -122,7 +206,8 @@ def _build_base_transactions(rng: random.Random) -> list[dict[str, object]]:
             "txn_method": "ACH",
             "roth_initial_contribution_year": None,
         },
-    ]
+        ]
+    )
 
     for row in base:
         row["transaction_id"] = _transaction_id(rng)
@@ -130,8 +215,13 @@ def _build_base_transactions(rng: random.Random) -> list[dict[str, object]]:
     return base
 
 
-def _build_relius_transactions(base: list[dict[str, object]], rng: random.Random) -> pd.DataFrame:
+def _build_relius_transactions(
+    base: list[dict[str, object]],
+    rng: random.Random,
+    faker: Faker,
+) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
+    ava_row = next((row for row in base if row["ssn"] == "111223333"), base[0])
 
     for row in base:
         rows.append(
@@ -164,7 +254,7 @@ def _build_relius_transactions(base: list[dict[str, object]], rng: random.Random
                 "DISTRNAM": "Cash Distribution",
             },
             {
-                "PLANID_1": base[0]["plan_id"],
+                "PLANID_1": ava_row["plan_id"],
                 "SSNUM_1": "111223333",
                 "FIRSTNAM": "Ava",
                 "LASTNAM": "Nguyen",
@@ -181,10 +271,15 @@ def _build_relius_transactions(base: list[dict[str, object]], rng: random.Random
     return pd.DataFrame(rows, columns=list(RELIUS_COLUMN_MAP.keys()))
 
 
-def _build_matrix_export(base: list[dict[str, object]], rng: random.Random) -> pd.DataFrame:
+def _build_matrix_export(
+    base: list[dict[str, object]],
+    rng: random.Random,
+    faker: Faker,
+) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
 
     matrix_accounts = ["07C00442", "07D00442", "07E00442", "07F00442"]
+    ava_row = next((row for row in base if row["ssn"] == "111223333"), base[0])
 
     for idx, row in enumerate(base):
         rows.append(
@@ -207,7 +302,7 @@ def _build_matrix_export(base: list[dict[str, object]], rng: random.Random) -> p
             }
         )
 
-    duplicate_txn = base[2].copy()
+    duplicate_txn = next((row for row in base if row["ssn"] == "333445555"), base[2]).copy()
     rows.append(
         {
             "Matrix Account": "07G00442",
@@ -266,7 +361,7 @@ def _build_matrix_export(base: list[dict[str, object]], rng: random.Random) -> p
             },
             {
                 "Matrix Account": "07B00442",
-                "Client Account": base[0]["plan_id"],
+                "Client Account": ava_row["plan_id"],
                 "Participant SSN": "123456789",
                 "Participant Name": "Edge Case",
                 "Participant State": "CA",
@@ -287,8 +382,42 @@ def _build_matrix_export(base: list[dict[str, object]], rng: random.Random) -> p
     return pd.DataFrame(rows, columns=list(MATRIX_COLUMN_MAP.keys()))
 
 
-def _build_relius_demo(rng: random.Random) -> pd.DataFrame:
-    rows = [
+def _build_relius_demo(rng: random.Random, faker: Faker) -> pd.DataFrame:
+    plan_ids = sorted({*INHERITED_PLAN_IDS, "400001ABC", "300005R"})
+    reserved_ssns = {"111223333", "222334444", "333445555", "444556666", "555667777"}
+    used_ssns = set(reserved_ssns)
+
+    rows: list[dict[str, object]] = []
+    for _ in range(100):
+        ssn = f"{rng.randint(100000000, 999999999)}"
+        while ssn in used_ssns:
+            ssn = f"{rng.randint(100000000, 999999999)}"
+        used_ssns.add(ssn)
+
+        birth_date = faker.date_between_dates(
+            date_start=date(1940, 1, 1),
+            date_end=date(2005, 12, 31),
+        )
+        term_date = None
+        if rng.random() < 0.75:
+            term_date = faker.date_between_dates(
+                date_start=date(2010, 1, 1),
+                date_end=date(2024, 12, 31),
+            )
+
+        rows.append(
+            {
+                "PLANID": rng.choice(plan_ids),
+                "SSNUM": ssn,
+                "FIRSTNAM": faker.first_name(),
+                "LASTNAM": faker.last_name(),
+                "BIRTHDATE": birth_date.isoformat(),
+                "TERM_DATE": term_date.isoformat() if term_date else None,
+            }
+        )
+
+    rows.extend(
+        [
         {
             "PLANID": "300004PLAT",
             "SSNUM": "111223333",
@@ -329,13 +458,40 @@ def _build_relius_demo(rng: random.Random) -> pd.DataFrame:
             "BIRTHDATE": "not-a-date",
             "TERM_DATE": "2022-01-15",
         },
-    ]
+        ]
+    )
 
     return pd.DataFrame(rows, columns=list(RELIUS_DEMO_COLUMN_MAP.keys()))
 
 
-def _build_relius_roth_basis(rng: random.Random) -> pd.DataFrame:
-    rows = [
+def _build_relius_roth_basis(rng: random.Random, faker: Faker) -> pd.DataFrame:
+    reserved_ssns = {"333445555", "555667777", "666778888"}
+    used_ssns = set(reserved_ssns)
+
+    rows: list[dict[str, object]] = []
+    for _ in range(100):
+        ssn = f"{rng.randint(100000000, 999999999)}"
+        while ssn in used_ssns:
+            ssn = f"{rng.randint(100000000, 999999999)}"
+        used_ssns.add(ssn)
+
+        first_tax_year = rng.randint(2000, 2020)
+        if rng.random() < 0.1:
+            first_tax_year = None
+
+        rows.append(
+            {
+                "PLANID": "300005R",
+                "SSNUM": ssn,
+                "FIRSTNAM": faker.first_name(),
+                "LASTNAM": faker.last_name(),
+                "FIRSTTAXYEARROTH": first_tax_year,
+                "Total": _amount(rng, 3000, 18000),
+            }
+        )
+
+    rows.extend(
+        [
         {
             "PLANID": "300005R",
             "SSNUM": "333445555",
@@ -360,20 +516,23 @@ def _build_relius_roth_basis(rng: random.Random) -> pd.DataFrame:
             "FIRSTTAXYEARROTH": 1800,
             "Total": -100.00,
         },
-    ]
+        ]
+    )
 
     return pd.DataFrame(rows, columns=list(RELIUS_ROTH_BASIS_COLUMN_MAP.keys()))
 
 
 def generate_sample_data(output_dir: Path = SAMPLE_DIR, seed: int = DEFAULT_SEED) -> dict[str, Path]:
     rng = random.Random(seed)
+    faker = Faker()
+    faker.seed_instance(seed)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    base_transactions = _build_base_transactions(rng)
-    relius_df = _build_relius_transactions(base_transactions, rng)
-    matrix_df = _build_matrix_export(base_transactions, rng)
-    relius_demo_df = _build_relius_demo(rng)
-    relius_roth_basis_df = _build_relius_roth_basis(rng)
+    base_transactions = _build_base_transactions(rng, faker)
+    relius_df = _build_relius_transactions(base_transactions, rng, faker)
+    matrix_df = _build_matrix_export(base_transactions, rng, faker)
+    relius_demo_df = _build_relius_demo(rng, faker)
+    relius_roth_basis_df = _build_relius_roth_basis(rng, faker)
 
     outputs = {
         "relius": output_dir / "relius_sample.xlsx",
