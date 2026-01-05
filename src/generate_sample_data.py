@@ -82,7 +82,7 @@ def _build_base_transactions(rng: random.Random, faker: Faker) -> list[dict[str,
     ]
 
     txn_methods = ["ACH", "Wire", "Check", "Account Transfer"]
-    reserved_ssns = {"111223333", "222334444", "333445555", "444556666"}
+    reserved_ssns = {"111223333", "222334444", "333445555", "444556666", "555667777", "666778888"}
     used_ssns = set(reserved_ssns)
 
     base: list[dict[str, object]] = []
@@ -186,6 +186,44 @@ def _build_base_transactions(rng: random.Random, faker: Faker) -> list[dict[str,
             "dist_type": "Roth",
             "txn_method": "ACH",
             "roth_initial_contribution_year": 2016,
+        },
+        {
+            "plan_id": "300005R",
+            "ssn": "555667777",
+            "first_name": "Zoe",
+            "last_name": "Lopez",
+            "state": "OR",
+            "gross_amt": _amount(rng, 9000, 13000),
+            "exported_date": "2024-05-10",
+            "txn_date": "2024-05-12",
+            "tax_year": 2024,
+            "dist_name": "Roth Distribution",
+            "dist_code_1": "B",
+            "tax_code_1": "B",
+            "tax_code_2": "G",
+            "tax_form": "1099-R",
+            "dist_type": "Roth",
+            "txn_method": "Wire",
+            "roth_initial_contribution_year": None,
+        },
+        {
+            "plan_id": "300005R",
+            "ssn": "666778888",
+            "first_name": "Evan",
+            "last_name": "Stone",
+            "state": "CO",
+            "gross_amt": _amount(rng, 7000, 11000),
+            "exported_date": "2024-06-15",
+            "txn_date": "2024-06-17",
+            "tax_year": 2024,
+            "dist_name": "Roth Distribution",
+            "dist_code_1": "B",
+            "tax_code_1": "B",
+            "tax_code_2": "G",
+            "tax_form": "1099-R",
+            "dist_type": "Roth",
+            "txn_method": "Check",
+            "roth_initial_contribution_year": 2012,
         },
         {
             "plan_id": inherited_secondary,
@@ -382,144 +420,233 @@ def _build_matrix_export(
     return pd.DataFrame(rows, columns=list(MATRIX_COLUMN_MAP.keys()))
 
 
-def _build_relius_demo(rng: random.Random, faker: Faker) -> pd.DataFrame:
-    plan_ids = sorted({*INHERITED_PLAN_IDS, "400001ABC", "300005R"})
-    reserved_ssns = {"111223333", "222334444", "333445555", "444556666", "555667777"}
-    used_ssns = set(reserved_ssns)
-
-    rows: list[dict[str, object]] = []
-    for _ in range(100):
-        ssn = f"{rng.randint(100000000, 999999999)}"
-        while ssn in used_ssns:
-            ssn = f"{rng.randint(100000000, 999999999)}"
-        used_ssns.add(ssn)
-
-        birth_date = faker.date_between_dates(
-            date_start=date(1940, 1, 1),
-            date_end=date(2005, 12, 31),
-        )
-        term_date = None
-        if rng.random() < 0.75:
-            term_date = faker.date_between_dates(
-                date_start=date(2010, 1, 1),
-                date_end=date(2024, 12, 31),
-            )
-
-        rows.append(
-            {
-                "PLANID": rng.choice(plan_ids),
-                "SSNUM": ssn,
-                "FIRSTNAM": faker.first_name(),
-                "LASTNAM": faker.last_name(),
-                "BIRTHDATE": birth_date.isoformat(),
-                "TERM_DATE": term_date.isoformat() if term_date else None,
-            }
-        )
-
-    rows.extend(
-        [
-        {
-            "PLANID": "300004PLAT",
-            "SSNUM": "111223333",
+def _build_relius_demo(
+    base: list[dict[str, object]],
+    rng: random.Random,
+    faker: Faker,
+) -> pd.DataFrame:
+    edge_by_ssn = {
+        "111223333": {
             "FIRSTNAM": "Ava",
             "LASTNAM": "Nguyen",
             "BIRTHDATE": "1970-05-10",
             "TERM_DATE": "2020-12-31",
         },
-        {
-            "PLANID": "400001ABC",
-            "SSNUM": "222334444",
+        "222334444": {
             "FIRSTNAM": "Liam",
             "LASTNAM": "Patel",
             "BIRTHDATE": "1962-11-03",
             "TERM_DATE": None,
         },
-        {
-            "PLANID": "300005R",
-            "SSNUM": "333445555",
+        "333445555": {
             "FIRSTNAM": "Mia",
             "LASTNAM": "Chen",
             "BIRTHDATE": "1985-07-19",
             "TERM_DATE": "2023-06-30",
         },
-        {
-            "PLANID": "300004MBD",
-            "SSNUM": "444556666",
+        "444556666": {
             "FIRSTNAM": "Noah",
             "LASTNAM": "Garcia",
             "BIRTHDATE": None,
             "TERM_DATE": "2021-05-01",
         },
-        {
-            "PLANID": "300005R",
-            "SSNUM": "555667777",
-            "FIRSTNAM": "Zoe",
-            "LASTNAM": "Lopez",
-            "BIRTHDATE": "not-a-date",
-            "TERM_DATE": "2022-01-15",
-        },
-        ]
-    )
+    }
+
+    rows: list[dict[str, object]] = []
+    index_by_key: dict[tuple[str, str], int] = {}
+
+    for row in base:
+        key = (row["plan_id"], row["ssn"])
+        if key in index_by_key:
+            continue
+
+        edge = edge_by_ssn.get(row["ssn"])
+        if edge:
+            demo_row = {
+                "PLANID": row["plan_id"],
+                "SSNUM": row["ssn"],
+                **edge,
+            }
+        else:
+            birth_date = faker.date_between_dates(
+                date_start=date(1940, 1, 1),
+                date_end=date(2005, 12, 31),
+            )
+            term_date = None
+            if rng.random() < 0.75:
+                term_date = faker.date_between_dates(
+                    date_start=date(2010, 1, 1),
+                    date_end=date(2024, 12, 31),
+                )
+
+            demo_row = {
+                "PLANID": row["plan_id"],
+                "SSNUM": row["ssn"],
+                "FIRSTNAM": row["first_name"],
+                "LASTNAM": row["last_name"],
+                "BIRTHDATE": birth_date.isoformat(),
+                "TERM_DATE": term_date.isoformat() if term_date else None,
+            }
+
+        index_by_key[key] = len(rows)
+        rows.append(demo_row)
+
+    invalid_dob_row = {
+        "PLANID": "300005R",
+        "SSNUM": "555667777",
+        "FIRSTNAM": "Zoe",
+        "LASTNAM": "Lopez",
+        "BIRTHDATE": "not-a-date",
+        "TERM_DATE": "2022-01-15",
+    }
+    invalid_key = (invalid_dob_row["PLANID"], invalid_dob_row["SSNUM"])
+    existing_idx = index_by_key.get(invalid_key)
+    if existing_idx is None:
+        rows.append(invalid_dob_row)
+    else:
+        rows[existing_idx] = invalid_dob_row
 
     return pd.DataFrame(rows, columns=list(RELIUS_DEMO_COLUMN_MAP.keys()))
 
 
-def _build_relius_roth_basis(rng: random.Random, faker: Faker) -> pd.DataFrame:
-    reserved_ssns = {"333445555", "555667777", "666778888"}
-    used_ssns = set(reserved_ssns)
-
-    rows: list[dict[str, object]] = []
-    for _ in range(100):
-        ssn = f"{rng.randint(100000000, 999999999)}"
-        while ssn in used_ssns:
-            ssn = f"{rng.randint(100000000, 999999999)}"
-        used_ssns.add(ssn)
-
-        first_tax_year = rng.randint(2000, 2020)
-        if rng.random() < 0.1:
-            first_tax_year = None
-
-        rows.append(
-            {
-                "PLANID": "300005R",
-                "SSNUM": ssn,
-                "FIRSTNAM": faker.first_name(),
-                "LASTNAM": faker.last_name(),
-                "FIRSTTAXYEARROTH": first_tax_year,
-                "Total": _amount(rng, 3000, 18000),
-            }
-        )
-
-    rows.extend(
-        [
-        {
-            "PLANID": "300005R",
-            "SSNUM": "333445555",
+def _build_relius_roth_basis(
+    base: list[dict[str, object]],
+    rng: random.Random,
+    faker: Faker,
+) -> pd.DataFrame:
+    edge_by_ssn = {
+        "333445555": {
             "FIRSTNAM": "Mia",
             "LASTNAM": "Chen",
             "FIRSTTAXYEARROTH": 2016,
             "Total": _amount(rng, 10000, 14000),
         },
-        {
-            "PLANID": "300005R",
-            "SSNUM": "555667777",
+        "555667777": {
             "FIRSTNAM": "Zoe",
             "LASTNAM": "Lopez",
             "FIRSTTAXYEARROTH": None,
             "Total": _amount(rng, 5000, 8000),
         },
-        {
-            "PLANID": "300005R",
-            "SSNUM": "666778888",
+        "666778888": {
             "FIRSTNAM": "Evan",
             "LASTNAM": "Stone",
             "FIRSTTAXYEARROTH": 1800,
             "Total": -100.00,
         },
-        ]
-    )
+    }
+
+    rows: list[dict[str, object]] = []
+    index_by_key: dict[tuple[str, str], int] = {}
+
+    for row in base:
+        if row["dist_type"] != "Roth":
+            continue
+
+        key = (row["plan_id"], row["ssn"])
+        if key in index_by_key:
+            continue
+
+        edge = edge_by_ssn.get(row["ssn"])
+        if edge:
+            basis_row = {
+                "PLANID": row["plan_id"],
+                "SSNUM": row["ssn"],
+                **edge,
+            }
+        else:
+            basis_row = {
+                "PLANID": row["plan_id"],
+                "SSNUM": row["ssn"],
+                "FIRSTNAM": row["first_name"],
+                "LASTNAM": row["last_name"],
+                "FIRSTTAXYEARROTH": row["roth_initial_contribution_year"],
+                "Total": _amount(rng, 3000, 18000),
+            }
+
+        index_by_key[key] = len(rows)
+        rows.append(basis_row)
+
+    extra_rows = [
+        {
+            "PLANID": "300005R",
+            "SSNUM": ssn,
+            **edge_by_ssn[ssn],
+        }
+        for ssn in ("555667777", "666778888")
+    ]
+
+    for row in extra_rows:
+        key = (row["PLANID"], row["SSNUM"])
+        existing_idx = index_by_key.get(key)
+        if existing_idx is None:
+            rows.append(row)
+        else:
+            rows[existing_idx] = row
 
     return pd.DataFrame(rows, columns=list(RELIUS_ROTH_BASIS_COLUMN_MAP.keys()))
+
+
+def _join_coverage_ratio(
+    left_df: pd.DataFrame,
+    right_df: pd.DataFrame,
+    key_cols: list[str],
+) -> float:
+    if left_df.empty:
+        return 0.0
+
+    right_keys = right_df[key_cols].drop_duplicates()
+    merged = left_df.merge(right_keys, on=key_cols, how="left", indicator=True)
+    return float((merged["_merge"] == "both").mean())
+
+
+def _validate_sample_joins(
+    matrix_df: pd.DataFrame,
+    relius_demo_df: pd.DataFrame,
+    relius_roth_basis_df: pd.DataFrame,
+    min_ratio: float = 0.5,
+) -> None:
+    matrix_keys = matrix_df.rename(columns=MATRIX_COLUMN_MAP)[["plan_id", "ssn", "dist_type"]]
+    demo_keys = relius_demo_df.rename(columns=RELIUS_DEMO_COLUMN_MAP)[["plan_id", "ssn"]]
+    basis_keys = relius_roth_basis_df.rename(columns=RELIUS_ROTH_BASIS_COLUMN_MAP)[
+        ["plan_id", "ssn"]
+    ]
+
+    required_matrix_edges = [
+        {"plan_id": "300005R", "ssn": "555667777", "dist_type": "Roth"},
+        {"plan_id": "300005R", "ssn": "666778888", "dist_type": "Roth"},
+    ]
+    missing_edges = []
+    for edge in required_matrix_edges:
+        mask = (
+            (matrix_keys["plan_id"] == edge["plan_id"])
+            & (matrix_keys["ssn"] == edge["ssn"])
+            & (matrix_keys["dist_type"] == edge["dist_type"])
+        )
+        if not mask.any():
+            missing_edges.append(f"{edge['plan_id']}:{edge['ssn']}")
+    if missing_edges:
+        missing_str = ", ".join(missing_edges)
+        raise ValueError(f"Expected edge-case Matrix rows for {missing_str}.")
+
+    demo_ratio = _join_coverage_ratio(matrix_keys[["plan_id", "ssn"]], demo_keys, ["plan_id", "ssn"])
+    if demo_ratio <= min_ratio:
+        raise ValueError(
+            "Expected majority of Matrix rows to match Relius demo rows; "
+            f"got {demo_ratio:.1%}."
+        )
+
+    roth_matrix = matrix_keys[matrix_keys["dist_type"] == "Roth"]
+    if not roth_matrix.empty:
+        basis_ratio = _join_coverage_ratio(
+            roth_matrix[["plan_id", "ssn"]],
+            basis_keys,
+            ["plan_id", "ssn"],
+        )
+        if basis_ratio <= min_ratio:
+            raise ValueError(
+                "Expected majority of Roth Matrix rows to match Relius Roth basis rows; "
+                f"got {basis_ratio:.1%}."
+            )
 
 
 def generate_sample_data(output_dir: Path = SAMPLE_DIR, seed: int = DEFAULT_SEED) -> dict[str, Path]:
@@ -531,8 +658,9 @@ def generate_sample_data(output_dir: Path = SAMPLE_DIR, seed: int = DEFAULT_SEED
     base_transactions = _build_base_transactions(rng, faker)
     relius_df = _build_relius_transactions(base_transactions, rng, faker)
     matrix_df = _build_matrix_export(base_transactions, rng, faker)
-    relius_demo_df = _build_relius_demo(rng, faker)
-    relius_roth_basis_df = _build_relius_roth_basis(rng, faker)
+    relius_demo_df = _build_relius_demo(base_transactions, rng, faker)
+    relius_roth_basis_df = _build_relius_roth_basis(base_transactions, rng, faker)
+    _validate_sample_joins(matrix_df, relius_demo_df, relius_roth_basis_df)
 
     outputs = {
         "relius": output_dir / "relius_sample.xlsx",
