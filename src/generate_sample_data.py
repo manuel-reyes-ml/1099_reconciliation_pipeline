@@ -82,7 +82,7 @@ def _build_base_transactions(rng: random.Random, faker: Faker) -> list[dict[str,
     ]
 
     txn_methods = ["ACH", "Wire", "Check", "Account Transfer"]
-    reserved_ssns = {"111223333", "222334444", "333445555", "444556666"}
+    reserved_ssns = {"111223333", "222334444", "333445555", "444556666", "555667777", "666778888"}
     used_ssns = set(reserved_ssns)
 
     base: list[dict[str, object]] = []
@@ -186,6 +186,44 @@ def _build_base_transactions(rng: random.Random, faker: Faker) -> list[dict[str,
             "dist_type": "Roth",
             "txn_method": "ACH",
             "roth_initial_contribution_year": 2016,
+        },
+        {
+            "plan_id": "300005R",
+            "ssn": "555667777",
+            "first_name": "Zoe",
+            "last_name": "Lopez",
+            "state": "OR",
+            "gross_amt": _amount(rng, 9000, 13000),
+            "exported_date": "2024-05-10",
+            "txn_date": "2024-05-12",
+            "tax_year": 2024,
+            "dist_name": "Roth Distribution",
+            "dist_code_1": "B",
+            "tax_code_1": "B",
+            "tax_code_2": "G",
+            "tax_form": "1099-R",
+            "dist_type": "Roth",
+            "txn_method": "Wire",
+            "roth_initial_contribution_year": None,
+        },
+        {
+            "plan_id": "300005R",
+            "ssn": "666778888",
+            "first_name": "Evan",
+            "last_name": "Stone",
+            "state": "CO",
+            "gross_amt": _amount(rng, 7000, 11000),
+            "exported_date": "2024-06-15",
+            "txn_date": "2024-06-17",
+            "tax_year": 2024,
+            "dist_name": "Roth Distribution",
+            "dist_code_1": "B",
+            "tax_code_1": "B",
+            "tax_code_2": "G",
+            "tax_form": "1099-R",
+            "dist_type": "Roth",
+            "txn_method": "Check",
+            "roth_initial_contribution_year": 2012,
         },
         {
             "plan_id": inherited_secondary,
@@ -572,6 +610,23 @@ def _validate_sample_joins(
     basis_keys = relius_roth_basis_df.rename(columns=RELIUS_ROTH_BASIS_COLUMN_MAP)[
         ["plan_id", "ssn"]
     ]
+
+    required_matrix_edges = [
+        {"plan_id": "300005R", "ssn": "555667777", "dist_type": "Roth"},
+        {"plan_id": "300005R", "ssn": "666778888", "dist_type": "Roth"},
+    ]
+    missing_edges = []
+    for edge in required_matrix_edges:
+        mask = (
+            (matrix_keys["plan_id"] == edge["plan_id"])
+            & (matrix_keys["ssn"] == edge["ssn"])
+            & (matrix_keys["dist_type"] == edge["dist_type"])
+        )
+        if not mask.any():
+            missing_edges.append(f"{edge['plan_id']}:{edge['ssn']}")
+    if missing_edges:
+        missing_str = ", ".join(missing_edges)
+        raise ValueError(f"Expected edge-case Matrix rows for {missing_str}.")
 
     demo_ratio = _join_coverage_ratio(matrix_keys[["plan_id", "ssn"]], demo_keys, ["plan_id", "ssn"])
     if demo_ratio <= min_ratio:
