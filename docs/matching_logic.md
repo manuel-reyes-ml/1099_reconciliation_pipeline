@@ -7,12 +7,12 @@ It covers:
 - **🔁 Engine A (Reconciliation):** Relius ↔ Matrix matching for inherited-plan workflows
 - **🎂 Engine B (Age-based):** Matrix tax-code analysis using Relius demographics (DOB / term date)
 - **🧾 Engine C (Roth taxable):** Roth taxable amount and Roth tax-code logic
-- **🧹 Cleaning assumptions:** canonical schema produced by `clean_relius.py` and `clean_matrix.py`
-- **📤 Correction outputs:** how `build_correction_file.py` consumes engine results
+- **🧹 Cleaning assumptions:** canonical schema produced by `cleaning/clean_relius.py` and `cleaning/clean_matrix.py`
+- **📤 Correction outputs:** how `outputs/build_correction_file.py` consumes engine results
 
 > **Note:** Field names in synthetic sample files may differ slightly (snake_case).
 > This document describes the **canonical** fields produced by the pipeline.
-> To regenerate synthetic inputs from the repo root, run the deterministic Faker-based generator via `python -m src.generate_sample_data` or `notebooks/00_generate_sample_data.ipynb`.
+> To regenerate synthetic inputs from the repo root, run the deterministic Faker-based generator via `python -m src.core.generate_sample_data` or `notebooks/00_generate_sample_data.ipynb`.
 
 ---
 
@@ -64,16 +64,16 @@ For quick orientation, these are the most impactful rules:
 └───────────────┬───────────┘ └───────────────┬───────────┘
                 │                             │
                 ▼                             ▼
-          clean_relius.py               clean_matrix.py
+          cleaning/clean_relius.py               cleaning/clean_matrix.py
                 │                             │
                 └──────────── Engine A (Reconcile) ───────┘
                                   │
                                   ▼
-                        match_planid.py
+                        engines/match_planid.py
                         (reconcile_relius_matrix)
                                   │
                                   ▼
-                         build_correction_file.py
+                         outputs/build_correction_file.py
                          (Matrix correction output)
 
 ┌──────────────────────────────────────┐
@@ -81,28 +81,28 @@ For quick orientation, these are the most impactful rules:
 │ (DOB / term date by plan + SSN)      │
 └──────────────────┬───────────────────┘
                    ▼
-            clean_relius_demo.py
+            cleaning/clean_relius_demo.py
                    │
                    ▼
-         age_taxcode_analysis.py
+         engines/age_taxcode_analysis.py
          (Engine B: Age rules)
                    │
                    ▼
-         build_correction_file.py
+         outputs/build_correction_file.py
 
 ┌──────────────────────────────────────┐
 │ Relius Roth Basis (.xlsx)            │
 │ (first_roth_tax_year, roth_basis_amt)│
 └──────────────────┬───────────────────┘
                    ▼
-          clean_relius_roth_basis.py
+          cleaning/clean_relius_roth_basis.py
                    │
                    ▼
-        roth_taxable_analysis.py
+        engines/roth_taxable_analysis.py
         (Engine C: Roth taxable)
                    │
                    ▼
-        build_correction_file.py
+        outputs/build_correction_file.py
 
 ### 0.2 Why three engines?
 
@@ -281,7 +281,7 @@ For inherited plans, expected codes are driven by distribution type:
 - Cash-like distributions (Relius dist category is not rollover/partial_rollover) → **tax_code_1 = 4**, **tax_code_2 = (blank)**
 - Rollover distributions (`dist_category_relius` in `rollover` or `partial_rollover`) → **tax_code_1 = 4**, **tax_code_2 = G**
 
-`dist_category_relius` is derived from Relius `dist_name` in `clean_relius.py`.
+`dist_category_relius` is derived from Relius `dist_name` in `cleaning/clean_relius.py`.
 
 Engine A compares Matrix current codes vs expected:
 - If aligned → `match_no_action`
@@ -474,7 +474,7 @@ The following status values appear across engine outputs:
 
 ## 7. Correction File Contract
 
-`build_correction_file.py` expects engines to provide:
+`outputs/build_correction_file.py` expects engines to provide:
 
 ### 7.1 Required fields (minimum)
 - `match_status` (must be `match_needs_correction` to export)
