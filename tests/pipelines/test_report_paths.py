@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 
 from src import config
-from src import export_utils
-from src import build_correction_file as bcf
+from src.outputs import export_utils
+from src.outputs import build_correction_file as bcf
 
 
 def _patch_report_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]:
