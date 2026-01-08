@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.clean_relius import clean_relius
+from src.cleaning.clean_relius import clean_relius
 
 
 def test_clean_relius_adds_validation_flags_and_issues() -> None:

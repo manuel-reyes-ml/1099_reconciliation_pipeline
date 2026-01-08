@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.roth_taxable_analysis import run_roth_taxable_analysis
+from src.engines.roth_taxable_analysis import run_roth_taxable_analysis
 
 
 def test_run_roth_taxable_masks_invalid_start_years() -> None:

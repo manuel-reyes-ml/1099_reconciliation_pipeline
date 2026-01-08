@@ -10,18 +10,21 @@ This package contains the core modules for:
 - Matching transactions
 - Building 1099 correction files
 
+Subpackages:
+- core
+- cleaning
+- engines
+- visualization
+- outputs
+
 """
 
 #Import modules to be exposed at the package level
+from . import core, cleaning, engines, visualization, outputs
 __all__ = [
-    "config",
-    "load_data",
-    "clean_relius",
-    "clean_relius_demo",
-    "clean_relius_roth_basis",
-    "clean_matrix",
-    "match_planid",
-    "build_correction_file",
-    "age_taxcode_analysis",
-    "roth_taxable_analysis",
+    "core",
+    "cleaning",
+    "engines",
+    "visualization",
+    "outputs",
 ]

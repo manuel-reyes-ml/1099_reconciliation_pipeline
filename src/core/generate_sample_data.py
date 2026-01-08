@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 from faker import Faker
 
-from src.config import (
+from ..config import (
     INHERITED_PLAN_IDS,
     MATRIX_COLUMN_MAP,
     RELIUS_COLUMN_MAP,

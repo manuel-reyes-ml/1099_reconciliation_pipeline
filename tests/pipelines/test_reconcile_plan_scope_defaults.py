@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.config import DEFAULT_RECONCILIATION_PLAN_IDS, MATCH_STATUS_CONFIG
-from src.match_planid import reconcile_relius_matrix
+from src.engines.match_planid import reconcile_relius_matrix
 
 
 def test_reconcile_defaults_filter_out_of_scope_plans() -> None:

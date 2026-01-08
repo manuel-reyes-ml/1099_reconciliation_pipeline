@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.clean_matrix import clean_matrix
+from src.cleaning.clean_matrix import clean_matrix
 
 
 def test_clean_matrix_cross_field_issue_added() -> None:

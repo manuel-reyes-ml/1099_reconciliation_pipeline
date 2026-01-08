@@ -41,9 +41,9 @@ Typical usage
 These loaders are commonly used indirectly via cleaning functions, but can be
 useful in notebooks during EDA:
 
-    from src.load_data import load_matrix_excel, load_relius_excel
-    from src.clean_matrix import clean_matrix
-    from src.clean_relius import clean_relius
+    from src.core.load_data import load_matrix_excel, load_relius_excel
+    from src.cleaning.clean_matrix import clean_matrix
+    from src.cleaning.clean_relius import clean_relius
 
     matrix_raw = load_matrix_excel("data/raw/matrix.xlsx")
     matrix_clean = clean_matrix("data/raw/matrix.xlsx")  # (clean_matrix may call loader internally)
@@ -70,8 +70,8 @@ from typing import Optional #For type hinting optional parameters | Describing t
 
 import pandas as pd #The main data manipulation library for data tables
 
-# Relative imports from the config module in the same package /src
-from .config import (
+# Relative imports from the config module in the same package /src/core
+from ..config import (
     RAW_DATA_DIR,
     SAMPLE_DIR,
     USE_SAMPLE_DATA_DEFAULT,

@@ -94,14 +94,14 @@ Public API
 
 from __future__ import annotations
 import pandas as pd
-from .config import (
+from ..config import (
     AGE_TAXCODE_CONFIG,
     INHERITED_PLAN_IDS,
     MATCH_STATUS_CONFIG,
     ROTH_TAXABLE_CONFIG,
 )
 
-from .normalizers import (
+from ..core.normalizers import (
     attained_age_by_year_end,
     normalize_tax_code_series,
     _is_roth_plan,

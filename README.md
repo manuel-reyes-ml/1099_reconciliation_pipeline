@@ -165,7 +165,7 @@ Purpose: Roth taxable analysis and Roth start-year corrections
 ### 3️⃣ Data Cleaning Pipeline
 ```python
 from src.config import MATRIX_COLUMN_MAP
-from src.normalizers import normalize_ssn_series, normalize_tax_code_series, to_date_series
+from src.core.normalizers import normalize_ssn_series, normalize_tax_code_series, to_date_series
 
 # Canonical column mapping + normalization
 df = df.rename(columns=MATRIX_COLUMN_MAP)
@@ -267,21 +267,31 @@ New First Year contrib | Reason | Action
 ├── src/                                # Core pipeline modules
 │   ├── __init__.py
 │   ├── config.py                       # Settings (tolerances, paths)
-│   ├── load_data.py                    # Excel → pandas DataFrames
-│   ├── normalizers.py                  # Canonical field normalization
-│   ├── clean_relius.py                 # Relius cleaning logic
-│   ├── clean_relius_demo.py            # Relius demographics cleaning
-│   ├── clean_relius_roth_basis.py      # Relius Roth basis cleaning
-│   ├── clean_matrix.py                 # Matrix cleaning logic
-│   ├── match_planid.py                 # Engine A (inherited matching)
-│   ├── match_planid_visualization.py   # Engine A charts
-│   ├── age_taxcode_analysis.py         # Engine B (age-based non-Roth)
-│   ├── age_taxcode_visualization.py    # Engine B charts
-│   ├── export_utils.py                 # Export helpers
-│   ├── generate_sample_data.py         # Synthetic sample generator
-│   ├── roth_taxable_analysis.py        # Engine C (Roth taxable)
-│   ├── roth_taxable_visualization.py   # Engine C charts
-│   └── build_correction_file.py        # Generate Excel output
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── load_data.py                # Excel → pandas DataFrames
+│   │   ├── normalizers.py              # Canonical field normalization
+│   │   └── generate_sample_data.py     # Synthetic sample generator
+│   ├── cleaning/
+│   │   ├── __init__.py
+│   │   ├── clean_relius.py             # Relius cleaning logic
+│   │   ├── clean_relius_demo.py        # Relius demographics cleaning
+│   │   ├── clean_relius_roth_basis.py  # Relius Roth basis cleaning
+│   │   └── clean_matrix.py             # Matrix cleaning logic
+│   ├── engines/
+│   │   ├── __init__.py
+│   │   ├── match_planid.py             # Engine A (inherited matching)
+│   │   ├── age_taxcode_analysis.py     # Engine B (age-based non-Roth)
+│   │   └── roth_taxable_analysis.py    # Engine C (Roth taxable)
+│   ├── visualization/
+│   │   ├── __init__.py
+│   │   ├── match_planid_visualization.py
+│   │   ├── age_taxcode_visualization.py
+│   │   └── roth_taxable_visualization.py
+│   └── outputs/
+│       ├── __init__.py
+│       ├── export_utils.py             # Export helpers
+│       └── build_correction_file.py    # Generate Excel output
 │
 ├── notebooks/                          # Analysis walkthrough
 │   ├── 00_generate_sample_data.ipynb
@@ -390,13 +400,13 @@ python -c "import openpyxl; print('✓ openpyxl installed')"
 
 **Sample data defaults (public repo)**
 - Loader functions honor `USE_SAMPLE_DATA_DEFAULT` in `src/config.py` when `path` is omitted.
-- Keep it set to `True` to use `data/sample/`. Regenerate synthetic inputs from the repo root with `python -m src.generate_sample_data` or run `notebooks/00_generate_sample_data.ipynb`.
+- Keep it set to `True` to use `data/sample/`. Regenerate synthetic inputs from the repo root with `python -m src.core.generate_sample_data` or run `notebooks/00_generate_sample_data.ipynb`.
 
 #### Option 1: Run Complete Pipeline (Command Line)
 Runs the Engine A inherited-plan workflow using sample data in `data/sample/`.
 ```bash
 # Engine A: inherited-plan reconciliation + correction file
-python -m src.build_correction_file
+python -m src.outputs.build_correction_file
 ```
 
 #### Option 2: Interactive Analysis (Jupyter)
@@ -419,12 +429,12 @@ jupyter notebook
 
 #### Option 3: Use as Module
 ```python
-from src.load_data import load_relius_excel, load_matrix_excel
-from src.clean_relius import clean_relius
-from src.clean_matrix import clean_matrix
-from src.match_planid import reconcile_relius_matrix
-from src.build_correction_file import build_correction_dataframe, write_correction_file
-from src.export_utils import write_df_excel
+from src.core.load_data import load_relius_excel, load_matrix_excel
+from src.cleaning.clean_relius import clean_relius
+from src.cleaning.clean_matrix import clean_matrix
+from src.engines.match_planid import reconcile_relius_matrix
+from src.outputs.build_correction_file import build_correction_dataframe, write_correction_file
+from src.outputs.export_utils import write_df_excel
 
 # Load and clean
 relius_raw = load_relius_excel("data/sample/relius_sample.xlsx")

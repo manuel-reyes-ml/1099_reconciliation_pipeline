@@ -78,7 +78,7 @@ from __future__ import annotations   # makes type hints ("annotations") be store
 
 import pandas as pd
 
-from .config import (                # '.' in .config looks for a sibling module inside src/
+from ..config import (                # Relative import from the config module.
     AGE_TAXCODE_CONFIG,
     INHERITED_PLAN_IDS,
     MATCH_STATUS_CONFIG,
@@ -86,7 +86,7 @@ from .config import (                # '.' in .config looks for a sibling module
     ROTH_TAXABLE_CONFIG,
     RothTaxableConfig,
 )
-from .normalizers import (
+from ..core.normalizers import (
     _append_action,
     _append_reason,
     _compute_age_years,

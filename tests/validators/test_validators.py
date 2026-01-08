@@ -1,7 +1,7 @@
 import pandas as pd
 from datetime import date
 
-from src.normalizers import (
+from src.core.normalizers import (
     build_validation_issues,
     cross_validate_series,
     validate_1099r_code_series,

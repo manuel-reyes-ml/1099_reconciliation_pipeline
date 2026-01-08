@@ -106,12 +106,12 @@ from typing import Iterable #A type hint to describe an arg(variable) should be 
 import warnings
 import pandas as pd
 
-from .config import (
+from ..config import (
     RELIUS_COLUMN_MAP,
     RELIUS_CORE_COLUMNS,
     RELIUS_MATCH_KEYS,
 )
-from .normalizers import (
+from ..core.normalizers import (
     build_validation_issues,
     normalize_plan_id_series,
     normalize_ssn_series,
