@@ -4,7 +4,7 @@ generate_sample_data.py
 Seeded generator for synthetic Matrix and Relius sample inputs.
 
 This script writes four Excel files into data/sample/, using raw headers that
-match the column maps in src/config.py so load_data.py validation passes.
+match the column maps in src/core/config.py so load_data.py validation passes.
 The outputs are deterministic given a seed and include both valid and edge-case
 rows to exercise normalization and validation logic.
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 from faker import Faker
 
-from src.config import (
+from .config import (
     INHERITED_PLAN_IDS,
     MATRIX_COLUMN_MAP,
     RELIUS_COLUMN_MAP,

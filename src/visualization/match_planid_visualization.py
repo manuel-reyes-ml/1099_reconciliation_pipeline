@@ -11,7 +11,7 @@ from typing import Tuple
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from .config import MATCHING_CONFIG, MATCH_STATUS_CONFIG
+from ..core.config import MATCHING_CONFIG, MATCH_STATUS_CONFIG
 
 
 STATUS_CFG = MATCH_STATUS_CONFIG

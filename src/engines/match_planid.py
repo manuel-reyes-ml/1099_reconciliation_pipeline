@@ -110,7 +110,7 @@ from typing import Iterable, Optional  # Type hints helpers
 
 import pandas as pd
 
-from .config import (
+from ..core.config import (
     INHERITED_PLAN_IDS,    # A collecion (Set) of plan IDs that are considered "inherited".
     MATCH_STATUS_CONFIG,
     MATCHING_CONFIG,       # A dataclass instance with parameters such as max_date_lag_days.

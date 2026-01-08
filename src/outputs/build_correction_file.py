@@ -74,7 +74,7 @@ Usage (notebooks / scripts)
 ---------------------------
 Example: inherited-plan reconciliation output -> correction file
 
-    from src.build_correction_file import build_correction_dataframe, write_correction_file
+    from src.outputs.build_correction_file import build_correction_dataframe, write_correction_file
 
     # primary_matches is the filtered, in-tolerance result from match_planid
     corrections_df = build_correction_dataframe(primary_matches)
@@ -82,8 +82,8 @@ Example: inherited-plan reconciliation output -> correction file
 
 Example: age-based correction output -> correction file
 
-    from src.build_correction_file import build_correction_dataframe, write_correction_file
-    from src.age_taxcode_analysis import run_age_taxcode_analysis
+    from src.outputs.build_correction_file import build_correction_dataframe, write_correction_file
+    from src.engines.age_taxcode_analysis import run_age_taxcode_analysis
 
     analysis_df = run_age_taxcode_analysis(matrix_clean, relius_demo)
     corrections_df = build_correction_dataframe(analysis_df)
@@ -106,13 +106,13 @@ from typing import Iterable, Optional   # These are for type hints.
 
 import pandas as pd
 
-from .config import (
+from ..core.config import (
     REPORTS_OUTPUTS_DIR,
     REPORTS_SAMPLES_DIR,
     USE_SAMPLE_DATA_DEFAULT,
     get_engine_outputs_dir,
     get_engine_samples_dir,
-)         # '.' in .config means 'sibling module'.
+)         # Relative import from the core config module.
 
 
 
@@ -354,11 +354,11 @@ def main() -> None:
 
     # These imports are inside main() so that importing the module doesn't automatically import everything;
     #  they only needed when you run the pipeline.
-    from .config import RAW_DATA_DIR, DEFAULT_RECONCILIATION_PLAN_IDS
-    from .load_data import load_relius_excel, load_matrix_excel
-    from .clean_relius import clean_relius
-    from .clean_matrix import clean_matrix
-    from .match_planid import reconcile_relius_matrix
+    from ..core.config import RAW_DATA_DIR, DEFAULT_RECONCILIATION_PLAN_IDS
+    from ..core.load_data import load_relius_excel, load_matrix_excel
+    from ..cleaning.clean_relius import clean_relius
+    from ..cleaning.clean_matrix import clean_matrix
+    from ..engines.match_planid import reconcile_relius_matrix
 
 
 
