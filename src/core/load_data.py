@@ -71,7 +71,7 @@ from typing import Optional #For type hinting optional parameters | Describing t
 import pandas as pd #The main data manipulation library for data tables
 
 # Relative imports from the config module in the same package /src/core
-from .config import (
+from ..config import (
     RAW_DATA_DIR,
     SAMPLE_DIR,
     USE_SAMPLE_DATA_DEFAULT,

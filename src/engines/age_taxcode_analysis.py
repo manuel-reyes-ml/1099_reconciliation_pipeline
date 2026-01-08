@@ -94,7 +94,7 @@ Public API
 
 from __future__ import annotations
 import pandas as pd
-from ..core.config import (
+from ..config import (
     AGE_TAXCODE_CONFIG,
     INHERITED_PLAN_IDS,
     MATCH_STATUS_CONFIG,

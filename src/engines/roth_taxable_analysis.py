@@ -78,7 +78,7 @@ from __future__ import annotations   # makes type hints ("annotations") be store
 
 import pandas as pd
 
-from ..core.config import (                # Relative import from the core config module.
+from ..config import (                # Relative import from the config module.
     AGE_TAXCODE_CONFIG,
     INHERITED_PLAN_IDS,
     MATCH_STATUS_CONFIG,

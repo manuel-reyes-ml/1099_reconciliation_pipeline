@@ -11,7 +11,7 @@ from typing import Tuple
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from ..core.config import MATCH_STATUS_CONFIG, ROTH_TAXCODE_CONFIG
+from ..config import MATCH_STATUS_CONFIG, ROTH_TAXCODE_CONFIG
 
 
 STATUS_CFG = MATCH_STATUS_CONFIG

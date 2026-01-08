@@ -67,7 +67,7 @@ Usage
 -----
 All other modules import configuration from here. Example:
 
-    from src.core.config import MATRIX_COLUMN_MAP, MAX_DELAY_DAYS, AGE_TAXCODE_CONFIG
+    from src.config import MATRIX_COLUMN_MAP, MAX_DELAY_DAYS, AGE_TAXCODE_CONFIG
 
 Privacy / compliance note
 -------------------------
@@ -86,10 +86,9 @@ from pathlib import Path #object-oriented filesystem paths instead of strings
 # --- Base paths ----------------------------------------------------------------
 
 # src/ -> project root
-BASE_DIR = Path(__file__).resolve().parents[2]
-#parents[0] = config.py directory = src/core/
-#parents[1] = src/
-#parents[2] = project root directory = 1099_reconciliation_pipeline/
+BASE_DIR = Path(__file__).resolve().parents[1]
+#parents[0] = config.py directory = src/
+#parents[1] = project root directory = 1099_reconciliation_pipeline/
 
 DATA_DIR = BASE_DIR / "data"
 SAMPLE_DIR = DATA_DIR / "sample"
@@ -188,7 +187,7 @@ class MatchingConfig:
 MATCHING_CONFIG = MatchingConfig()
 #Creates a singleton instance of MatchingConfig with default values
 #For example, to access amount_tolerance_cents:
-    #from src.core.config import MATCHING_CONFIG
+    #from src.config import MATCHING_CONFIG
     #tol_amount = MATCHING_CONFIG.amount_tolerance_cents
     #tol_days = MATCHING_CONFIG.date_tolerance_days
 

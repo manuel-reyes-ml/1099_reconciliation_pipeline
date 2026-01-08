@@ -106,7 +106,7 @@ from typing import Iterable #A type hint to describe an arg(variable) should be 
 import warnings
 import pandas as pd
 
-from ..core.config import (
+from ..config import (
     RELIUS_COLUMN_MAP,
     RELIUS_CORE_COLUMNS,
     RELIUS_MATCH_KEYS,

@@ -106,13 +106,13 @@ from typing import Iterable, Optional   # These are for type hints.
 
 import pandas as pd
 
-from ..core.config import (
+from ..config import (
     REPORTS_OUTPUTS_DIR,
     REPORTS_SAMPLES_DIR,
     USE_SAMPLE_DATA_DEFAULT,
     get_engine_outputs_dir,
     get_engine_samples_dir,
-)         # Relative import from the core config module.
+)         # Relative import from the config module.
 
 
 
@@ -354,7 +354,7 @@ def main() -> None:
 
     # These imports are inside main() so that importing the module doesn't automatically import everything;
     #  they only needed when you run the pipeline.
-    from ..core.config import RAW_DATA_DIR, DEFAULT_RECONCILIATION_PLAN_IDS
+    from ..config import RAW_DATA_DIR, DEFAULT_RECONCILIATION_PLAN_IDS
     from ..core.load_data import load_relius_excel, load_matrix_excel
     from ..cleaning.clean_relius import clean_relius
     from ..cleaning.clean_matrix import clean_matrix

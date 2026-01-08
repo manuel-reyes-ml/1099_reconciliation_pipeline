@@ -60,7 +60,7 @@ from typing import Iterable
 import warnings
 
 import pandas as pd
-from ..core.config import (
+from ..config import (
     RELIUS_ROTH_BASIS_COLUMN_MAP,
     RELIUS_ROTH_BASIS_CORE_COLUMNS,
 )

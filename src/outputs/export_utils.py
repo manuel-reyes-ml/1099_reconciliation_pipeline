@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..core.config import REPORTS_DIR, get_engine_outputs_dir
+from ..config import REPORTS_DIR, get_engine_outputs_dir
 
 
 EXCEL_SHEETNAME_LIMIT = 31

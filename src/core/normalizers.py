@@ -59,7 +59,7 @@ from typing import Any                   # Type hint meaning "this can be anythi
 import pandas as pd
 import re                                # Python's built-in regular expression module
 
-from .config import RothTaxableConfig
+from ..config import RothTaxableConfig
 
 VALID_1099R_CODES = {
     "1",

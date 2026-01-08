@@ -12,7 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-from ..core.config import MATCH_STATUS_CONFIG
+from ..config import MATCH_STATUS_CONFIG
 
 
 STATUS_CFG = MATCH_STATUS_CONFIG

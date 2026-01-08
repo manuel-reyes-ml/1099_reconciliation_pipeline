@@ -110,7 +110,7 @@ import warnings
 
 import pandas as pd
 
-from ..core.config import (
+from ..config import (
     MATRIX_COLUMN_MAP,
     MATRIX_CORE_COLUMNS,
     MATRIX_MATCH_KEYS,

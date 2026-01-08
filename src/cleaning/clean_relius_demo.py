@@ -44,7 +44,7 @@ import warnings
 
 import pandas as pd
 
-from ..core.config import RELIUS_DEMO_COLUMN_MAP
+from ..config import RELIUS_DEMO_COLUMN_MAP
 from ..core.normalizers import (
     build_validation_issues,
     normalize_plan_id_series,
