@@ -47,3 +47,13 @@ def test_date_filter_invalid_range_raises() -> None:
 def test_date_filter_all_conflict_raises() -> None:
     with pytest.raises(ValueError, match="Months cannot include 'all'"):
         normalize_date_filter_config(DateFilterConfig(months=["all", "July"]))
+
+
+def test_date_filter_all_only_list_treated_as_all() -> None:
+    date_start, date_end, months = normalize_date_filter_config(
+        DateFilterConfig(months=["all"])
+    )
+
+    assert date_start is None
+    assert date_end is None
+    assert months is None
