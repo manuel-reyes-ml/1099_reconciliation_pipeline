@@ -167,7 +167,7 @@ def _normalize_transaction_id(value) -> str | pd.NA:
     
     Logic:
     - Convert to string, strip
-    - Find the first numeric digits '\d' before the ending 0 and return it
+    - Find the first numeric digits "\\d" before the ending 0 and return it
     - If nothing found, return <NA>
 
     """
