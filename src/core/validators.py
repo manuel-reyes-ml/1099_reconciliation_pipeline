@@ -131,6 +131,8 @@ def _normalize_months_config(months: object) -> tuple[int, ...] | None:
     if months is None:
         return None
     if isinstance(months, str):
+        if months.strip() == "":
+            return None
         if months.strip().lower() == DATE_FILTER_ALL:
             return None
         month_values = [months]
@@ -143,6 +145,16 @@ def _normalize_months_config(months: object) -> tuple[int, ...] | None:
             raise ValueError(
                 f"Invalid months configuration: {months!r}. Expected a month name or iterable."
             ) from exc
+    month_values = [
+        value
+        for value in month_values
+        if not (
+            value is None
+            or (isinstance(value, str) and value.strip() == "")
+        )
+    ]
+    if not month_values:
+        return None
     if any(
         isinstance(value, str) and value.strip().lower() == DATE_FILTER_ALL
         for value in month_values
