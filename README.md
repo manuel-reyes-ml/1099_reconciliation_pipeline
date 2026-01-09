@@ -1,9 +1,10 @@
 # 🧾 1099 Reconciliation Pipeline
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue)
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![Pandas](https://img.shields.io/badge/Pandas-2.0+-green)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Status](https://img.shields.io/badge/Status-Portfolio-brightgreen)
+![CI](https://github.com/manuel-reyes-ml/1099_reconciliation_pipeline/actions/workflows/ci.yml/badge.svg?branch=main)
 
 Automated data pipeline for **reconciling retirement plan distributions** between Relius (distribution exports) and Matrix (disbursement/1099 exports). Standardizes inputs, runs three matching/correction engines (A/B/C), and produces Matrix-ready correction recommendations (tax codes, taxable amount, Roth basis year).
 
@@ -21,6 +22,7 @@ I built this project to showcase **both Data Engineering and Data Analytics in a
 - [Data Analysis Process](#-data-analysis-process)
 - [Repository Structure](#️-repository-structure)
 - [Tech Stack](#️-tech-stack)
+- [CI & Testing](#-ci--testing)
 - [Getting Started](#-getting-started)
 - [Results & Impact](#-results--impact)
 - [What I Learned](#-what-i-learned)
@@ -335,7 +337,7 @@ New First Year contrib | Reason | Action
 
 | Category | Technology | Purpose |
 |----------|-----------|---------|
-| **Language** | Python 3.8+ | Core logic |
+| **Language** | Python 3.11+ | Core logic |
 | **Data Processing** | pandas | DataFrames, joins, grouping |
 | **Numeric** | numpy | Tolerance checks, calculations |
 | **Excel I/O** | openpyxl | Read/write .xlsx files |
@@ -350,10 +352,20 @@ New First Year contrib | Reason | Action
 
 ---
 
+## ✅ CI & Testing
+
+- GitHub Actions runs pytest on every push and pull request to `main`.
+- Tests execute across a Python 3.11+ matrix aligned with supported releases.
+- CI installs `requirements-dev.txt` and runs `pytest -q` for fast feedback.
+
+**Recruiter Note:** Automated testing validates business-rule changes before they reach production workflows.
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python 3.11 or higher
 - pip (Python package manager)
 - Git
 
