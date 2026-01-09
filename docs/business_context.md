@@ -241,6 +241,18 @@ From a portfolio perspective, this project is successful if it:
 
 ---
 
+## 6.5 CI & Testing
+
+To keep changes reliable and auditable, this repository includes automated testing:
+
+- GitHub Actions runs on pushes and pull requests to `main`.
+- Tests run across Python 3.11+ to validate supported runtime versions.
+- The workflow installs dev dependencies and executes `pytest -q` for fast feedback.
+
+> **For Recruiters:** CI provides a quality gate that reduces regression risk and reinforces production-ready engineering habits.
+
+---
+
 ## 7. High-Level Workflow
 
 1. **Extract**
