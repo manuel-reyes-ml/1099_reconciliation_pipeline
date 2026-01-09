@@ -155,6 +155,11 @@ def _normalize_months_config(months: object) -> tuple[int, ...] | None:
     ]
     if not month_values:
         return None
+    if all(
+        isinstance(value, str) and value.strip().lower() == DATE_FILTER_ALL
+        for value in month_values
+    ):
+        return None
     if any(
         isinstance(value, str) and value.strip().lower() == DATE_FILTER_ALL
         for value in month_values
