@@ -22,6 +22,16 @@ def test_date_filter_month_names_and_numbers() -> None:
     assert months == (7, 9, 12)
 
 
+def test_date_filter_empty_months_treated_as_all() -> None:
+    date_start, date_end, months = normalize_date_filter_config(
+        DateFilterConfig(months=[])
+    )
+
+    assert date_start is None
+    assert date_end is None
+    assert months is None
+
+
 def test_date_filter_invalid_month_raises() -> None:
     with pytest.raises(ValueError, match="Invalid month value"):
         normalize_date_filter_config(DateFilterConfig(months=["NotAMonth"]))
