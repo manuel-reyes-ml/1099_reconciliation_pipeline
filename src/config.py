@@ -46,7 +46,10 @@ Contents
        asymmetric date tolerance (Matrix txn_date must be >= Relius exported_date
        and <= exported_date + MAX_DELAY_DAYS)
 
-5) Business rules configuration
+5) Date filter configuration
+   - DateFilterConfig (date_start, date_end, months)
+
+6) Business rules configuration
    A) Inherited-plan engine
       - INHERITED_PLAN_IDS
       - Distribution category mapping based on Relius `DISTRNAM`
@@ -79,6 +82,7 @@ environment variables or excluded local config files.
 
 
 from dataclasses import dataclass #create simple classes for configuration
+from datetime import date
 from pathlib import Path #object-oriented filesystem paths instead of strings
 
 
@@ -190,6 +194,31 @@ MATCHING_CONFIG = MatchingConfig()
     #from src.config import MATCHING_CONFIG
     #tol_amount = MATCHING_CONFIG.amount_tolerance_cents
     #tol_days = MATCHING_CONFIG.date_tolerance_days
+
+
+# --- Date filter configuration ------------------------------------------------------------
+
+DATE_FILTER_ALL = "all"
+
+
+@dataclass(frozen=True)
+class DateFilterConfig:
+
+    """
+
+    Configuration for transaction date filtering.
+
+    date_start / date_end:
+        Inclusive bounds for filtering (YYYY-MM-DD or date-like).
+    months:
+        Month names or numbers to include (e.g., "July", "Jul", 7). Use "all"
+        (default) to disable month filtering.
+
+    """
+
+    date_start: str | date | None = None
+    date_end: str | date | None = None
+    months: tuple[str | int, ...] | list[str | int] | set[str | int] | str | int | None = DATE_FILTER_ALL
 
 
 
@@ -487,6 +516,7 @@ class RothTaxCodeConfig:
     death_code: str = "4"
 
 
+DATE_FILTER_CONFIG = DateFilterConfig()
 AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
 MATCH_STATUS_CONFIG = MatchStatusConfig()
 ROTH_TAXABLE_CONFIG = RothTaxableConfig()
