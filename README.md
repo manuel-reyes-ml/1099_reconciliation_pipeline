@@ -176,6 +176,22 @@ df["txn_date"] = to_date_series(df["txn_date"])
 df["tax_code_1"] = normalize_tax_code_series(df["tax_code_1"])
 ```
 
+Optional date filtering (range + months) is configurable via `DateFilterConfig`:
+```python
+from src.config import DateFilterConfig
+from src.cleaning.clean_matrix import clean_matrix
+from src.cleaning.clean_relius import clean_relius
+
+date_filter = DateFilterConfig(
+    date_start="2025-07-01",
+    date_end="2025-09-30",
+    months=["July", "Aug", 9],
+)
+
+matrix_clean = clean_matrix(matrix_raw, date_filter=date_filter)
+relius_clean = clean_relius(relius_raw, date_filter=date_filter)
+```
+
 **Results:** Clean data written to `data/processed/` (gitignored)
 
 ---
@@ -273,6 +289,7 @@ New First Year contrib | Reason | Action
 │   │   ├── __init__.py
 │   │   ├── load_data.py                # Excel → pandas DataFrames
 │   │   ├── normalizers.py              # Canonical field normalization
+│   │   ├── validators.py               # Validation helpers
 │   │   └── generate_sample_data.py     # Synthetic sample generator
 │   ├── cleaning/
 │   │   ├── __init__.py

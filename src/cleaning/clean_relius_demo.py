@@ -46,11 +46,13 @@ import pandas as pd
 
 from ..config import RELIUS_DEMO_COLUMN_MAP
 from ..core.normalizers import (
-    build_validation_issues,
     normalize_plan_id_series,
     normalize_ssn_series,
     normalize_text_series,
     to_date_series,
+)
+from ..core.validators import (
+    build_validation_issues,
     validate_dates_series,
     validate_ssn_series,
 )

@@ -96,12 +96,14 @@ from __future__ import annotations
 import pandas as pd
 from ..config import (
     AGE_TAXCODE_CONFIG,
+    DateFilterConfig,
     INHERITED_PLAN_IDS,
     MATCH_STATUS_CONFIG,
     ROTH_TAXABLE_CONFIG,
 )
 
 from ..core.normalizers import (
+    apply_date_filter,
     attained_age_by_year_end,
     normalize_tax_code_series,
     _is_roth_plan,
@@ -162,6 +164,7 @@ def attach_demo_to_matrix(
 def run_age_taxcode_analysis(
         matrix_df: pd.DataFrame,
         relius_demo_df: pd.DataFrame,
+        date_filter: DateFilterConfig | None = None,
 ) -> pd.DataFrame:
     
     """
@@ -198,6 +201,7 @@ def run_age_taxcode_analysis(
         - Exclude Matrix rows where tax_code_1 indicates a rollover (G,H).
         - Exclude plans that are in INHERITED_PLAN_IDS, since those are
           handled by the inherited-plan engine (code 4 / 4+G).
+        - Apply optional date filtering on Matrix txn_date (guardrail).
         
     Returns a DataFrame that is compatible with build_correction_dataframe():
         - includes 'tax_code_1'
@@ -210,8 +214,9 @@ def run_age_taxcode_analysis(
     cfg = AGE_TAXCODE_CONFIG
     status_cfg = MATCH_STATUS_CONFIG
 
-    # 1) Attached demographics (DOB, termm_date, names) to Matrix data
-    df = attach_demo_to_matrix(matrix_df, relius_demo_df)
+    # 1) Apply optional date filter, then attach demographics (DOB, term_date)
+    matrix_filtered = apply_date_filter(matrix_df, "txn_date", date_filter=date_filter)
+    df = attach_demo_to_matrix(matrix_filtered, relius_demo_df)
 
     # Normalize tax codes defensively to ensure 1–2 character codes
     for col in ["tax_code_1", "tax_code_2"]:

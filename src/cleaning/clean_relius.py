@@ -107,22 +107,26 @@ import warnings
 import pandas as pd
 
 from ..config import (
+    DateFilterConfig,
     RELIUS_COLUMN_MAP,
     RELIUS_CORE_COLUMNS,
     RELIUS_MATCH_KEYS,
 )
 from ..core.normalizers import (
-    build_validation_issues,
+    apply_date_filter,
     normalize_plan_id_series,
     normalize_ssn_series,
     normalize_text_series,
+    to_date_series,
+    to_int64_nullable_series,
+    to_numeric_series,
+)
+from ..core.validators import (
+    build_validation_issues,
     validate_amounts_series,
     validate_dates_series,
     validate_1099r_code_series,
     validate_ssn_series,
-    to_date_series,
-    to_int64_nullable_series,
-    to_numeric_series,
 )
 
 
@@ -199,6 +203,7 @@ def _classify_relius_dist_type(name: str | float | None) -> str:
 def clean_relius(
         raw_df: pd.DataFrame,
         drop_rows_missing_keys: bool = True,
+        date_filter: DateFilterConfig | None = None,
 ) -> pd.DataFrame:
         
     """
@@ -210,8 +215,9 @@ def clean_relius(
     2. Keep only the core columns defined in RELIUS_CORE_COLUMNS
     3. Clean SSNs, dates, amounts, and distribution codes
     4. Derive a normalized distribution category from dist_name
-    5. Optionally drop rows missing key fields
-    6. Drop duplicate rows based on RELIUS_MATCH_KEYS
+    5. Apply optional exported-date filters (range/months)
+    6. Optionally drop rows missing key fields
+    7. Drop duplicate rows based on RELIUS_MATCH_KEYS
 
     Args:
         raw_df:
@@ -219,6 +225,8 @@ def clean_relius(
         drop_rows_missing_keys:
             If True, drop rows where any of the match keys are missing
             (plan_id, ssn, gross_amt, exported_date, tax_year).
+        date_filter:
+            Optional DateFilterConfig override. Defaults to DATE_FILTER_CONFIG.
         
     Returns:
         A cleaned DataFrame ready for matching with Matrix.
@@ -254,6 +262,8 @@ def clean_relius(
     # Dates
     if "exported_date" in df.columns:
         df["exported_date"] = to_date_series(df["exported_date"]) # Returns either Series of datetime.date or NaT
+        # 3.5) Optional date filtering on export date
+        df = apply_date_filter(df, "exported_date", date_filter=date_filter)
 
     # Tax year
     if "tax_year" in df.columns:

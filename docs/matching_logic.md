@@ -220,6 +220,12 @@ Canonical normalization extracts **1–2 leading characters**:
 Plan IDs are stripped and normalized for consistent matching and Roth plan
 identification (case-insensitive prefixes/suffixes).
 
+### 2.6 Date filtering (🟡 Important)
+- Optional transaction filters are configured via `DateFilterConfig` in `src/config.py`.
+- Filters support `date_start`, `date_end`, and `months` (month names or numbers).
+- When both range and months are provided, filters intersect (not union).
+- When filters are active, rows with missing/invalid dates are excluded.
+
 ---
 
 ## 3. Engine A — Relius ↔ Matrix Reconciliation

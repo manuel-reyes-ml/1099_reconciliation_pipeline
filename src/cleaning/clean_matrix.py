@@ -111,26 +111,30 @@ import warnings
 import pandas as pd
 
 from ..config import (
+    DateFilterConfig,
     MATRIX_COLUMN_MAP,
     MATRIX_CORE_COLUMNS,
     MATRIX_MATCH_KEYS,
 )
 
 from ..core.normalizers import (
-    build_validation_issues,
+    apply_date_filter,
     normalize_plan_id_series,
     normalize_ssn_series,
     normalize_state_series,
     normalize_tax_code_series,
     normalize_text_series,
+    to_date_series,
+    to_int64_nullable_series,
+    to_numeric_series,
+)
+from ..core.validators import (
+    build_validation_issues,
     cross_validate_series,
     validate_amounts_series,
     validate_dates_series,
     validate_1099r_code_series,
     validate_ssn_series,
-    to_date_series,
-    to_int64_nullable_series,
-    to_numeric_series,
 )
 
 
@@ -221,6 +225,7 @@ IGNORED_TXN_METHODS = {
 def clean_matrix(
         raw_df: pd.DataFrame,
         drop_rows_missing_keys: bool = True,
+        date_filter: DateFilterConfig | None = None,
 ) -> pd.DataFrame:
     
     """
@@ -234,8 +239,9 @@ def clean_matrix(
         - rows with matrix_account in IGNORED_MATRIX_ACCOUNTS
         - rows with txn_method in IGNORED_TXN_METHODS
     4. Clean SSNs, dates, amounts, tax codes, and text fields
-    5. Optionally drop rows missing key fields
-    6. Drop Duplicate rows based on MATRIX_MATCH_KEYS
+    5. Apply optional transaction-date filters (range/months)
+    6. Optionally drop rows missing key fields
+    7. Drop Duplicate rows based on MATRIX_MATCH_KEYS
 
     Args:
         raw_df:
@@ -243,6 +249,8 @@ def clean_matrix(
         drop_rows_missing_keys:
             If True, drop rows where any of the match keys are missing
             (plan_id, ssn, gross_amt, txn_date).
+        date_filter:
+            Optional DateFilterConfig override. Defaults to DATE_FILTER_CONFIG.
     
     Returns:
         A cleaned DataFrame ready for matching with Relius.
@@ -314,6 +322,8 @@ def clean_matrix(
     # Dates
     if "txn_date" in df.columns:
         df["txn_date"] = to_date_series(df["txn_date"]) # function takes a Series df[...] directly
+        # 4.5) Optional date filtering on transaction date
+        df = apply_date_filter(df, "txn_date", date_filter=date_filter)
     
     # Amounts
     if "gross_amt" in df.columns:

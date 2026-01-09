@@ -34,6 +34,7 @@ Scope
   with "300005" or ending in "R")
 - Exclude inherited plans (INHERITED_PLAN_IDS)
 - Do NOT exclude rollovers
+- Optional date filtering on Matrix txn_date (guardrail if cleaning is bypassed)
 
 Core rules (priority)
 ---------------------
@@ -80,6 +81,7 @@ import pandas as pd
 
 from ..config import (                # Relative import from the config module.
     AGE_TAXCODE_CONFIG,
+    DateFilterConfig,
     INHERITED_PLAN_IDS,
     MATCH_STATUS_CONFIG,
     ROTH_TAXCODE_CONFIG,
@@ -93,6 +95,7 @@ from ..core.normalizers import (
     _compute_start_year,
     _is_roth_plan,
     _to_datetime,
+    apply_date_filter,
     attained_age_by_year_end,
     normalize_plan_id_series,
     normalize_tax_code_series,
@@ -105,6 +108,7 @@ def run_roth_taxable_analysis(
         relius_demo_df: pd.DataFrame,
         relius_roth_basis_df: pd.DataFrame,
         cfg: RothTaxableConfig = ROTH_TAXABLE_CONFIG,
+        date_filter: DateFilterConfig | None = None,
 ) -> pd.DataFrame:
     """
     Run Engine C Roth taxable analysis and return a canonical DataFrame with
@@ -114,6 +118,7 @@ def run_roth_taxable_analysis(
     """
     
     df = matrix_df.copy()
+    df = apply_date_filter(df, "txn_date", date_filter=date_filter)
     status_cfg = MATCH_STATUS_CONFIG
     df["plan_id"] = normalize_plan_id_series(df["plan_id"], string_dtype=False)
 
