@@ -65,14 +65,16 @@ from ..config import (
     RELIUS_ROTH_BASIS_CORE_COLUMNS,
 )
 from ..core.normalizers import (
-    build_validation_issues,
     normalize_plan_id_series,
     normalize_ssn_series,
     normalize_text_series,
-    validate_amounts_series,
-    validate_ssn_series,
     to_int64_nullable_series,
     to_numeric_series,
+)
+from ..core.validators import (
+    build_validation_issues,
+    validate_amounts_series,
+    validate_ssn_series,
 )
 
 # --- Helper functions ------------------------------------------------------------
