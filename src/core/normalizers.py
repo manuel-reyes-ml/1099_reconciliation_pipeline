@@ -133,13 +133,16 @@ def apply_date_filter(
     if date_col not in df.columns:
         raise ValueError(f"Expected date column {date_col!r} for filtering.")
     dt = pd.to_datetime(df[date_col], errors="coerce")
-    mask = dt.notna()
+    # Normalize to date to avoid time-of-day exclusions and tz-aware comparisons.
+    date_values = dt.dt.date
+    mask = date_values.notna()
     if date_start is not None:
-        mask &= dt >= pd.Timestamp(date_start)
+        mask &= date_values >= date_start
     if date_end is not None:
-        mask &= dt <= pd.Timestamp(date_end)
+        mask &= date_values <= date_end
     if months is not None:
-        mask &= dt.dt.month.isin(months)
+        months_series = pd.to_datetime(date_values, errors="coerce").dt.month
+        mask &= months_series.isin(months)
     return df.loc[mask].copy()
 
 
