@@ -322,9 +322,8 @@ def clean_matrix(
     # Dates
     if "txn_date" in df.columns:
         df["txn_date"] = to_date_series(df["txn_date"]) # function takes a Series df[...] directly
-
-    # 4.5) Optional date filtering on transaction date
-    df = apply_date_filter(df, "txn_date", date_filter=date_filter)
+        # 4.5) Optional date filtering on transaction date
+        df = apply_date_filter(df, "txn_date", date_filter=date_filter)
     
     # Amounts
     if "gross_amt" in df.columns:

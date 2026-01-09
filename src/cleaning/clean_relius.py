@@ -262,9 +262,8 @@ def clean_relius(
     # Dates
     if "exported_date" in df.columns:
         df["exported_date"] = to_date_series(df["exported_date"]) # Returns either Series of datetime.date or NaT
-
-    # 3.5) Optional date filtering on export date
-    df = apply_date_filter(df, "exported_date", date_filter=date_filter)
+        # 3.5) Optional date filtering on export date
+        df = apply_date_filter(df, "exported_date", date_filter=date_filter)
 
     # Tax year
     if "tax_year" in df.columns:
