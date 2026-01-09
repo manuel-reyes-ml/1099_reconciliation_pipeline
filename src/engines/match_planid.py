@@ -111,11 +111,13 @@ from typing import Iterable, Optional  # Type hints helpers
 import pandas as pd
 
 from ..config import (
+    DateFilterConfig,
     INHERITED_PLAN_IDS,    # A collecion (Set) of plan IDs that are considered "inherited".
     MATCH_STATUS_CONFIG,
     MATCHING_CONFIG,       # A dataclass instance with parameters such as max_date_lag_days.
     DEFAULT_RECONCILIATION_PLAN_IDS,
 )
+from ..core.normalizers import apply_date_filter
 
 
 
@@ -254,6 +256,7 @@ def reconcile_relius_matrix(
         matrix_clean: pd.DataFrame,                 # Type hint to expect DataFrame
         plan_ids: Optional[Iterable[str]] = None,   # Type hint -> Can be a list/tuple/set/etc of strings or None
         apply_business_rules: bool = True,          # Type hint to expect boolean (True or False)
+        date_filter: DateFilterConfig | None = None,
 ) -> pd.DataFrame:                                  # Type hint to expect the funtion returns a DataFrame
     
     """
@@ -280,6 +283,8 @@ def reconcile_relius_matrix(
         apply_business_rules:
             If True, apply inherited-plan tax code rules and flag
             corrections. If False, skip that step (just match & classify).
+        date_filter:
+            Optional DateFilterConfig override. Defaults to DATE_FILTER_CONFIG.
 
     Returns:
         A merged DataFrame with:
@@ -307,6 +312,10 @@ def reconcile_relius_matrix(
         plan_ids = set(plan_ids)
         r = r[r["plan_id"].isin(plan_ids)].copy()
         m = m[m["plan_id"].isin(plan_ids)].copy()
+
+    # Optional date filtering (guardrail if cleaning is bypassed)
+    r = apply_date_filter(r, "exported_date", date_filter=date_filter)
+    m = apply_date_filter(m, "txn_date", date_filter=date_filter)
 
     # Join keys: distribution should be uniquely identified by these
     join_keys = ["plan_id", "ssn", "gross_amt"]
