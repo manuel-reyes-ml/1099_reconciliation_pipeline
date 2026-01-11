@@ -279,3 +279,65 @@ def test_build_correction_dataframe_exports_combined_new_tax_code() -> None:
 
     assert result.loc[0, "new_tax_code"] == "B1"
     assert corrections_df.loc[0, "New Tax Code"] == "B1"
+
+
+def test_build_correction_dataframe_exports_taxable_or_year_updates() -> None:
+    analysis_df = pd.DataFrame(
+        {
+            "match_status": [
+                "match_needs_correction",
+                "match_needs_correction",
+                "match_needs_correction",
+                "match_needs_review",
+                "match_needs_correction",
+            ],
+            "action": [
+                "UPDATE_1099",
+                "UPDATE_1099\nINVESTIGATE",
+                "INVESTIGATE",
+                "UPDATE_1099",
+                "UPDATE_1099",
+            ],
+            "suggested_tax_code_1": [pd.NA, pd.NA, pd.NA, pd.NA, pd.NA],
+            "suggested_tax_code_2": [pd.NA, pd.NA, pd.NA, pd.NA, pd.NA],
+            "suggested_taxable_amt": [0.0, pd.NA, 10.0, 5.0, pd.NA],
+            "suggested_first_roth_tax_year": [pd.NA, 2020, pd.NA, 2020, pd.NA],
+            "transaction_id": [
+                "tx_taxable_update",
+                "tx_year_update",
+                "tx_investigate",
+                "tx_review",
+                "tx_no_suggestion",
+            ],
+            "txn_date": [
+                pd.Timestamp("2025-01-01"),
+                pd.Timestamp("2025-01-02"),
+                pd.Timestamp("2025-01-03"),
+                pd.Timestamp("2025-01-04"),
+                pd.Timestamp("2025-01-05"),
+            ],
+            "ssn": [
+                "123456780",
+                "123456781",
+                "123456782",
+                "123456783",
+                "123456784",
+            ],
+            "participant_name": ["A", "B", "C", "D", "E"],
+            "matrix_account": ["acct1", "acct2", "acct3", "acct4", "acct5"],
+            "tax_code_1": ["B", "B", "B", "B", "B"],
+            "tax_code_2": ["", "", "", "", ""],
+            "correction_reason": ["r1", "r2", "r3", "r4", "r5"],
+        }
+    )
+
+    corrections_df = build_correction_dataframe(analysis_df)
+
+    assert set(corrections_df["Transaction Id"]) == {
+        "tx_taxable_update",
+        "tx_year_update",
+    }
+    taxable_row = corrections_df.set_index("Transaction Id").loc["tx_taxable_update"]
+    year_row = corrections_df.set_index("Transaction Id").loc["tx_year_update"]
+    assert taxable_row["New Taxable Amount"] == 0.0
+    assert year_row["New First Year contrib"] == 2020
