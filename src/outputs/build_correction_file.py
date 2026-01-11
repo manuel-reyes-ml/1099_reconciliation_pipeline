@@ -30,8 +30,9 @@ The input DataFrame (often named `matches` or `analysis_df`) should include:
 Required for filtering:
 - match_status:
     Must contain "match_needs_correction" for rows that should be exported.
-- suggested_tax_code_1:
-    Proposed Tax Code 1 to apply in Matrix (non-null for correction rows).
+- At least one actionable suggestion:
+    suggested_tax_code_1 / suggested_tax_code_2 and/or suggested_taxable_amt,
+    suggested_first_roth_tax_year.
 
 Required for Matrix correction output:
 - transaction_id:
@@ -144,7 +145,7 @@ def build_correction_dataframe(
     
     We select rows that:
         - have match_status == 'match_needs_correction'
-        - have a non-null suggested_tax_code_1
+        - have at least one actionable suggestion (tax code or taxable/year)
         - (optionally) have an 'action' in allowed_action
         - and, if colums exist, are within date tolerance and present in both systems.
 
@@ -164,9 +165,17 @@ def build_correction_dataframe(
 
     df = matches.copy()
 
-    # 1) Basic correction condition: status + suggestion present
+    # 1) Basic correction condition: status + actionable suggestion present
     mask_needs_corr = df["match_status"].eq("match_needs_correction")  # .eq -> is Series 1 equal to Series 2, returns a boolean Series(True / False)
-    mask_has_suggestion = df["suggested_tax_code_1"].notna()           # .notna() -> is Series not missing (NA), returns a boolean Series(True / False)
+    mask_has_suggestion = pd.Series(False, index=df.index)
+    for col in [
+        "suggested_tax_code_1",
+        "suggested_tax_code_2",
+        "suggested_taxable_amt",
+        "suggested_first_roth_tax_year",
+    ]:
+        if col in df.columns:
+            mask_has_suggestion |= df[col].notna()                     # .notna() -> is Series not missing (NA), returns a boolean Series(True / False)
 
     # 2) If '_merge' and 'date_within_tolerance' exist, enforce them;
     #    otherwise assume the input is already filtered.
