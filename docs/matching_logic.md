@@ -500,6 +500,7 @@ The following status values appear across engine outputs:
 - `action` (may contain multiple lines), `correction_reason`
 
 Default output location for `write_correction_file` follows `USE_SAMPLE_DATA_DEFAULT`: `reports/samples/<engine>/` in sample mode and `reports/outputs/<engine>/` in production mode when an engine is provided. If engine is omitted, outputs stay under `reports/samples/` or `reports/outputs/`. An explicit `output_path` overrides these defaults.
+Figure outputs from visualization notebooks follow `USE_SAMPLE_DATA_DEFAULT`: `reports/samples/figures/<engine>/` in sample mode and `reports/figures/<engine>/` in production.
 
 ---
 

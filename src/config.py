@@ -104,6 +104,7 @@ REPORTS_FIGURES_DIR = REPORTS_DIR / "figures"
 
 # Sample-mode outputs default to reports/samples; production outputs to reports/outputs.
 REPORTS_SAMPLES_DIR = REPORTS_DIR / "samples"
+REPORTS_SAMPLES_FIGURES_DIR = REPORTS_SAMPLES_DIR / "figures"
 REPORTS_OUTPUTS_DIR = REPORTS_DIR / "outputs"
 
 REPORT_ENGINE_NAMES = ("match_planid", "age_taxcode", "roth_taxable")
@@ -134,7 +135,8 @@ def get_engine_samples_dir(engine: str) -> Path:
 
 
 def get_engine_figures_dir(engine: str) -> Path:
-    return get_engine_report_dir(engine, REPORTS_FIGURES_DIR)
+    base_dir = REPORTS_SAMPLES_FIGURES_DIR if USE_SAMPLE_DATA_DEFAULT else REPORTS_FIGURES_DIR
+    return get_engine_report_dir(engine, base_dir)
 
 LOGS_DIR = BASE_DIR / "logs"
 
@@ -147,10 +149,12 @@ for _path in [
     REPORTS_DIR,
     REPORTS_FIGURES_DIR,
     REPORTS_SAMPLES_DIR,
+    REPORTS_SAMPLES_FIGURES_DIR,
     REPORTS_OUTPUTS_DIR,
     LOGS_DIR,
     *[REPORTS_OUTPUTS_DIR / engine for engine in REPORT_ENGINE_NAMES],
     *[REPORTS_SAMPLES_DIR / engine for engine in REPORT_ENGINE_NAMES],
+    *[REPORTS_SAMPLES_FIGURES_DIR / engine for engine in REPORT_ENGINE_NAMES],
     *[REPORTS_FIGURES_DIR / engine for engine in REPORT_ENGINE_NAMES],
 ]:
     _path.mkdir(parents=True, exist_ok=True)

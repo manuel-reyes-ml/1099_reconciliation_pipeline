@@ -10,25 +10,29 @@ from src.outputs import export_utils
 from src.outputs import build_correction_file as bcf
 
 
-def _patch_report_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]:
+def _patch_report_dirs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> tuple[Path, Path, Path, Path]:
     reports_dir = tmp_path / "reports"
     samples_dir = reports_dir / "samples"
     outputs_dir = reports_dir / "outputs"
     figures_dir = reports_dir / "figures"
+    samples_figures_dir = samples_dir / "figures"
 
     monkeypatch.setattr(config, "REPORTS_DIR", reports_dir)
     monkeypatch.setattr(config, "REPORTS_SAMPLES_DIR", samples_dir)
+    monkeypatch.setattr(config, "REPORTS_SAMPLES_FIGURES_DIR", samples_figures_dir)
     monkeypatch.setattr(config, "REPORTS_OUTPUTS_DIR", outputs_dir)
     monkeypatch.setattr(config, "REPORTS_FIGURES_DIR", figures_dir)
 
     monkeypatch.setattr(bcf, "REPORTS_SAMPLES_DIR", samples_dir)
     monkeypatch.setattr(bcf, "REPORTS_OUTPUTS_DIR", outputs_dir)
 
-    return samples_dir, outputs_dir
+    return samples_dir, outputs_dir, figures_dir, samples_figures_dir
 
 
 def test_write_correction_file_routes_to_engine_samples(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    samples_dir, _ = _patch_report_dirs(monkeypatch, tmp_path)
+    samples_dir, _, _, _ = _patch_report_dirs(monkeypatch, tmp_path)
     monkeypatch.setattr(bcf, "USE_SAMPLE_DATA_DEFAULT", True)
     monkeypatch.setattr(config, "USE_SAMPLE_DATA_DEFAULT", True)
 
@@ -42,7 +46,7 @@ def test_write_correction_file_routes_to_engine_samples(monkeypatch: pytest.Monk
 
 
 def test_write_correction_file_routes_to_engine_outputs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _, outputs_dir = _patch_report_dirs(monkeypatch, tmp_path)
+    _, outputs_dir, _, _ = _patch_report_dirs(monkeypatch, tmp_path)
     monkeypatch.setattr(bcf, "USE_SAMPLE_DATA_DEFAULT", False)
     monkeypatch.setattr(config, "USE_SAMPLE_DATA_DEFAULT", False)
 
@@ -56,7 +60,7 @@ def test_write_correction_file_routes_to_engine_outputs(monkeypatch: pytest.Monk
 
 
 def test_write_df_excel_engine_creates_outputs_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _, outputs_dir = _patch_report_dirs(monkeypatch, tmp_path)
+    _, outputs_dir, _, _ = _patch_report_dirs(monkeypatch, tmp_path)
 
     df = pd.DataFrame({"a": [1]})
 
@@ -71,3 +75,25 @@ def test_write_df_excel_engine_creates_outputs_dir(monkeypatch: pytest.MonkeyPat
 def test_invalid_engine_raises_value_error() -> None:
     with pytest.raises(ValueError, match="Unknown engine"):
         config.get_engine_outputs_dir("unknown_engine")
+    with pytest.raises(ValueError, match="Unknown engine"):
+        config.get_engine_figures_dir("unknown_engine")
+
+
+def test_get_engine_figures_dir_routes_to_samples(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _, _, _, samples_figures_dir = _patch_report_dirs(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "USE_SAMPLE_DATA_DEFAULT", True)
+
+    path = config.get_engine_figures_dir("match_planid")
+
+    expected_dir = samples_figures_dir / "match_planid"
+    assert path == expected_dir
+
+
+def test_get_engine_figures_dir_routes_to_production(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _, _, figures_dir, _ = _patch_report_dirs(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "USE_SAMPLE_DATA_DEFAULT", False)
+
+    path = config.get_engine_figures_dir("match_planid")
+
+    expected_dir = figures_dir / "match_planid"
+    assert path == expected_dir
