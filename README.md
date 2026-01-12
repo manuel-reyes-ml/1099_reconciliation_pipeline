@@ -332,7 +332,11 @@ New First Year contrib | Reason | Action
 │   │   ├── match_planid/
 │   │   ├── age_taxcode/
 │   │   └── roth_taxable/
-│   └── samples/                        # Timestamped correction files (sample default)
+│   └── samples/                        # Sample-mode outputs
+│       ├── figures/                    # Sample-mode charts
+│       │   ├── match_planid/
+│       │   ├── age_taxcode/
+│       │   └── roth_taxable/
 │       ├── match_planid/
 │       ├── age_taxcode/
 │       └── roth_taxable/
@@ -499,6 +503,7 @@ Production default uses `reports/outputs/<engine>/correction_file_[date].xlsx` w
 - `reports/outputs/<engine>/correction_file_[date].xlsx` - Production mode default
 If `engine` is omitted, outputs stay under `reports/samples/` or `reports/outputs/`. Explicit `output_path` values override these defaults.
 `write_df_excel(..., engine="<engine>")` writes to `reports/outputs/<engine>/` by default.
+Figure outputs from visualization notebooks follow `USE_SAMPLE_DATA_DEFAULT`: `reports/samples/figures/<engine>/` in sample mode and `reports/figures/<engine>/` in production.
 
 ---
 
