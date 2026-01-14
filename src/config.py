@@ -107,7 +107,7 @@ REPORTS_SAMPLES_DIR = REPORTS_DIR / "samples"
 REPORTS_SAMPLES_FIGURES_DIR = REPORTS_SAMPLES_DIR / "figures"
 REPORTS_OUTPUTS_DIR = REPORTS_DIR / "outputs"
 
-REPORT_ENGINE_NAMES = ("match_planid", "age_taxcode", "roth_taxable")
+REPORT_ENGINE_NAMES = ("match_planid", "age_taxcode", "roth_taxable", "ira_rollover")
 
 
 def normalize_engine_name(engine: str | None) -> str | None:
@@ -287,6 +287,7 @@ MATRIX_COLUMN_MAP = {
     "Tax Code":            "tax_code_1",        # primary tax code
     "Tax Code 2":          "tax_code_2",        # secondary tax code (if used)
     "Tax Form":            "tax_form",
+    "Federal Taxing Method": "federal_taxing_method",
     "Distribution Type":   "dist_type",
     "Transaction Id":      "transaction_id",
     "Fed Taxable Amount":  "fed_taxable_amt",
@@ -335,6 +336,7 @@ MATRIX_CORE_COLUMNS = [
     "tax_code_1",
     "tax_code_2",
     "tax_form",
+    "federal_taxing_method",
     "dist_type",
     "roth_initial_contribution_year",
     "transaction_id",
@@ -422,7 +424,7 @@ SPECIAL_CODE_RULES = [
 
 # If you ever want to quickly swap between sample data and "real" exports
 # in your notebooks or scripts, you can use this flag as a default.
-USE_SAMPLE_DATA_DEFAULT = True
+USE_SAMPLE_DATA_DEFAULT = False
 
 
 @dataclass(frozen=True)
@@ -520,8 +522,19 @@ class RothTaxCodeConfig:
     death_code: str = "4"
 
 
+@dataclass(frozen=True)
+class IraRolloverConfig:
+    """
+    Configuration for Engine D (IRA rollover tax-form audit).
+    """
+
+    ira_plan_prefixes: tuple[str, ...] = ("300001", "300005")
+    ira_plan_substrings: tuple[str, ...] = ("IRA",)
+
+
 DATE_FILTER_CONFIG = DateFilterConfig()
 AGE_TAXCODE_CONFIG = AgeTaxCodeConfig()
 MATCH_STATUS_CONFIG = MatchStatusConfig()
 ROTH_TAXABLE_CONFIG = RothTaxableConfig()
 ROTH_TAXCODE_CONFIG = RothTaxCodeConfig()
+IRA_ROLLOVER_CONFIG = IraRolloverConfig()
