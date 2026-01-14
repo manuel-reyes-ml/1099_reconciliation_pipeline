@@ -7,6 +7,7 @@ It covers:
 - **🔁 Engine A (Reconciliation):** Relius ↔ Matrix matching for inherited-plan workflows
 - **🎂 Engine B (Age-based):** Matrix tax-code analysis using Relius demographics (DOB / term date)
 - **🧾 Engine C (Roth taxable):** Roth taxable amount and Roth tax-code logic
+- **🏦 Engine D (IRA rollover audit):** Matrix-only IRA rollover tax-form checks
 - **🧹 Cleaning assumptions:** canonical schema produced by `cleaning/clean_relius.py` and `cleaning/clean_matrix.py`
 - **📤 Correction outputs:** how `outputs/build_correction_file.py` consumes engine results
 
@@ -25,15 +26,16 @@ It covers:
 - [3. Engine A — Relius ↔ Matrix Reconciliation](#3-engine-a--relius--matrix-reconciliation) — Match keys, date window, inherited rules
 - [4. Engine B — Age-Based Tax Code Engine](#4-engine-b--age-based-tax-code-engine) — DOB/term-based logic (non-Roth)
 - [5. Engine C — Roth Taxable Engine](#5-engine-c--roth-taxable-engine) — Roth taxable, basis, and tax-code rules
-- [6. Match Status Taxonomy](#6-match-status-taxonomy) — Definitions used across engines
-- [7. Correction File Contract](#7-correction-file-contract) — Required columns to write Matrix template
-- [8. Validation & QA Checklist](#8-validation--qa-checklist) — Recommended checks before delivery
-- [9. Edge Cases & Failure Modes](#9-edge-cases--failure-modes) — Duplicates, missing DOB, multi-digit codes
-- [10. Privacy Notes](#10-privacy-notes) — Synthetic data policy
+- [6. Engine D — IRA Rollover Tax-Form Audit](#6-engine-d--ira-rollover-tax-form-audit) — Matrix-only rollover vs tax-form checks
+- [7. Match Status Taxonomy](#7-match-status-taxonomy) — Definitions used across engines
+- [8. Correction File Contract](#8-correction-file-contract) — Required columns to write Matrix template
+- [9. Validation & QA Checklist](#9-validation--qa-checklist) — Recommended checks before delivery
+- [10. Edge Cases & Failure Modes](#10-edge-cases--failure-modes) — Duplicates, missing DOB, multi-digit codes
+- [11. Privacy Notes](#11-privacy-notes) — Synthetic data policy
 
 ---
 
-## 🎯 Most Critical Rules (Top 6)
+## 🎯 Most Critical Rules (Top 7)
 
 For quick orientation, these are the most impactful rules:
 
@@ -43,6 +45,7 @@ For quick orientation, these are the most impactful rules:
 4. **🎂 Age rule (Engine B):** age at distribution **≥ 59.5 → code 7** (non-Roth).
 5. **👔 Termination rule (Engine B):** if <59.5 and term date exists, **55+ at term → code 2**, otherwise **code 1**.
 6. **🅱️ Roth rule (Engine C):** Roth plans use taxable/basis logic and enforce Roth tax codes (B* for non-rollover, H for rollovers).
+7. **🏦 IRA rollover tax-form rule (Engine D):** IRA plan check distributions with federal taxing method = rollover should be Tax Form **No Tax**; `1099-R` requires correction (`new_tax_code = "0"`).
 
 ---
 
@@ -104,17 +107,29 @@ For quick orientation, these are the most impactful rules:
                    ▼
         outputs/build_correction_file.py
 
-### 0.2 Why three engines?
+Matrix-only IRA rollover audit (Engine D):
+
+    cleaning/clean_matrix.py
+            │
+            ▼
+    engines/ira_rollover_analysis.py
+            │
+            ▼
+    outputs/build_correction_file.py
+
+### 0.2 Why four engines?
 
 - **Engine A** solves: “Do these two systems agree on the same transaction?”
 - **Engine B** solves: “Given DOB/term, does Matrix have the correct non-Roth tax coding?”
 - **Engine C** solves: “For Roth plans, are taxable amounts, start year, and tax codes correct?”
+- **Engine D** solves: “For IRA rollovers, do tax-form selections align with rollover treatment?”
 
 They are intentionally independent so you can run:
 - Inherited-only reconciliation (Engine A), or
 - Age-based code auditing (Engine B), or
 - Roth taxable analysis (Engine C), or
-- All three, generating separate correction outputs.
+- IRA rollover tax-form audit (Engine D), or
+- All four, generating separate correction outputs.
 
 ---
 
@@ -180,6 +195,19 @@ They are intentionally independent so you can run:
 - `first_roth_tax_year`
 - `roth_basis_amt`
 
+### 1.4 Engine D — minimum required fields
+
+**Matrix canonical fields**
+- `plan_id`
+- `ssn`
+- `txn_date`
+- `transaction_id`
+- `txn_method`
+- `federal_taxing_method`
+- `tax_form`
+- `matrix_account`
+- `participant_name` or `full_name`
+
 ---
 
 ## 2. Cleaning & Normalization Rules
@@ -220,7 +248,11 @@ Canonical normalization extracts **1–2 leading characters**:
 Plan IDs are stripped and normalized for consistent matching and Roth plan
 identification (case-insensitive prefixes/suffixes).
 
-### 2.6 Date filtering (🟡 Important)
+### 2.6 Tax form & federal taxing method normalization (🟡 Important)
+Matrix `tax_form` and `federal_taxing_method` are normalized to trimmed,
+case-insensitive text to support Engine D rollover vs tax-form checks.
+
+### 2.7 Date filtering (🟡 Important)
 - Optional transaction filters are configured via `DateFilterConfig` in `src/config.py`.
 - Filters support `date_start`, `date_end`, and `months` (month names or numbers).
 - When both range and months are provided, filters intersect (not union).
@@ -461,7 +493,27 @@ Engine C emits:
 
 ---
 
-## 6. Match Status Taxonomy
+## 6. Engine D — IRA Rollover Tax-Form Audit
+
+### 6.1 Purpose
+Engine D audits IRA rollover check distributions in Matrix without matching to
+Relius. It verifies that rollover transactions are labeled with the correct
+tax form (No Tax vs 1099-R).
+
+### 6.2 Filters (Matrix-only)
+- IRA plans: `plan_id` contains configured IRA substrings (default: "IRA") or
+  starts with configured prefixes (default: `300001`, `300005`).
+- Transaction Type: normalized `txn_method` == "Check Distribution".
+- Federal Taxing Method: normalized to compare against `Rollover`.
+
+### 6.3 Classification rules
+- **Rollover + Tax Form "No Tax"** → `match_no_action`
+- **Rollover + Tax Form "1099-R"** → `match_needs_correction`,
+  `action = UPDATE_1099`, `suggested_tax_code_1 = "0"`, `new_tax_code = "0"`
+- Missing/unknown `federal_taxing_method` or `tax_form` → `match_needs_review`
+  with reason tokens (e.g., `missing_tax_form`, `unrecognized_tax_form`)
+
+## 7. Match Status Taxonomy
 
 The following status values appear across engine outputs:
 
@@ -478,11 +530,11 @@ The following status values appear across engine outputs:
 
 ---
 
-## 7. Correction File Contract
+## 8. Correction File Contract
 
 `outputs/build_correction_file.py` expects engines to provide:
 
-### 7.1 Required fields (minimum)
+### 8.1 Required fields (minimum)
 - `match_status` (must be `match_needs_correction` to export)
 - `suggested_tax_code_1` (required)
 - `transaction_id` (Matrix)
@@ -491,7 +543,7 @@ The following status values appear across engine outputs:
 - `participant_name` or `full_name`
 - `matrix_account`
 
-### 7.2 Optional but recommended
+### 8.2 Optional but recommended
 - `suggested_tax_code_2` (Roth or two-code cases)
 - `tax_code_1`, `tax_code_2` (current)
 - `suggested_taxable_amt`
@@ -504,23 +556,23 @@ Figure outputs from visualization notebooks follow `USE_SAMPLE_DATA_DEFAULT`: `r
 
 ---
 
-## 8. Validation & QA Checklist
+## 9. Validation & QA Checklist
 
 Before delivering a correction file:
 
-### 8.1 Engine A validation
+### 9.1 Engine A validation
 - ✅ Confirm `MATCHING_CONFIG.max_date_lag_days` reflects operational reality
 - ✅ Spot-check a sample of `date_out_of_range` rows
 - ✅ Verify no duplicate Matrix `transaction_id` in final correction output
 - ✅ Verify inherited plans only apply inherited tax code rules
 
-### 8.2 Engine B validation
+### 9.2 Engine B validation
 - ✅ Confirm exclusions: no `AGE_TAXCODE_CONFIG.excluded_codes` rows are corrected
 - ✅ Confirm inherited plans excluded from age output
 - ✅ Confirm Roth plans are excluded (handled by Engine C)
 - ✅ Confirm DOB join uses `(plan_id, ssn)` correctly
 
-### 8.3 Engine C validation
+### 9.3 Engine C validation
 - ✅ Confirm Roth plan patterns align with `ROTH_TAXABLE_CONFIG`
 - ✅ Confirm inherited plans are excluded, rollovers are not
 - ✅ Confirm rollover normalization to `H` (and `H + 4` when death code present)
@@ -528,9 +580,15 @@ Before delivering a correction file:
 - ✅ Confirm missing basis years are flagged as `INVESTIGATE`
 - ✅ Confirm `suggested_taxable_amt` and `suggested_first_roth_tax_year` are present when applicable
 
+### 9.4 Engine D validation
+- ✅ Confirm IRA plan detection aligns with configured prefixes/substrings
+- ✅ Confirm `txn_method` normalization captures "Check Distribution" variants
+- ✅ Confirm rollover + tax-form logic produces expected statuses and `new_tax_code = "0"`
+- ✅ Confirm missing/unknown `federal_taxing_method` or `tax_form` rows are `match_needs_review`
+
 ---
 
-## 9. Edge Cases & Failure Modes
+## 10. Edge Cases & Failure Modes
 
 - **Duplicate candidate matches (🟡):** same plan/SSN/amount repeats across weeks → can create repeated pairing candidates.
 - **Missing DOB/term (🟡):** age engine falls back or marks insufficient data.
@@ -540,10 +598,12 @@ Before delivering a correction file:
 - **Roth rollovers (🔴):** rollovers are not excluded; they should normalize to `H` and still receive taxable/basis checks.
 - **Missing/invalid Roth basis year (🟡):** Engine C flags `INVESTIGATE` rather than suggesting a year update.
 - **Multi-action outputs (🟡):** Engine C may emit multi-line `action` values; correction builder handles line-splitting.
+- **IRA tax-form inputs (🟡):** missing `federal_taxing_method` or `tax_form` yield review status; normalize whitespace/casing for `Check Distribution`.
+- **IRA plan detection (🟡):** `plan_id` substring matches (e.g., "IRA") can be over-inclusive; adjust config if false positives appear.
 
 ---
 
-## 10. Privacy Notes
+## 11. Privacy Notes
 
 This repository should contain **synthetic or masked** data only.
 

@@ -62,3 +62,37 @@ def test_clean_matrix_missing_txn_date_skips_date_filter() -> None:
     assert cleaned.shape[0] == 1
     assert "txn_date" not in cleaned.columns
     assert cleaned["date_valid"].isna().all()
+
+
+def test_clean_matrix_normalizes_participant_name() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Matrix Account": ["07A0001"],
+            "Client Account": ["PLAN1"],
+            "Participant SSN": ["123456780"],
+            "Participant Name": ["  Jane Doe  "],
+            "Gross Amount": [1000.0],
+            "Transaction Date": ["2020-01-02"],
+        }
+    )
+
+    cleaned = clean_matrix(raw_df, drop_rows_missing_keys=False)
+
+    assert cleaned.loc[0, "participant_name"] == "Jane Doe"
+    assert "partipant_name" not in cleaned.columns
+
+
+def test_clean_matrix_preserves_string_transaction_id() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Transaction Id": ["44324568"],
+            "Transaction Date": ["2025-01-01"],
+            "Client Account": ["PLAN1"],
+            "Participant SSN": ["123456780"],
+            "Gross Amount": [100.0],
+        }
+    )
+
+    cleaned = clean_matrix(raw_df, drop_rows_missing_keys=False)
+
+    assert cleaned.loc[0, "transaction_id"] == "44324568"

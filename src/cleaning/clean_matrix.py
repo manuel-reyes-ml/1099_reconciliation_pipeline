@@ -51,6 +51,8 @@ Core transformations
        Normalize to 1–2 leading characters (e.g., "7", "11", "G", "H") from
        strings like "7 - Normal Distribution". This prevents accidental truncation
        and supports multi-digit codes.
+   - Tax form (`tax_form`) and Federal taxing method (`federal_taxing_method`):
+       Normalize to consistent text casing/whitespace for downstream rules.
    - Roth initial contribution year (`roth_initial_contribution_year`):
        Convert to numeric and store as pandas nullable integer (Int64).
    - Text fields (participant name, state, plan_id, transaction type):
@@ -82,6 +84,8 @@ Typical canonical columns produced by this module include:
 - gross_amt
 - tax_code_1
 - tax_code_2
+- tax_form
+- federal_taxing_method
 
 Downstream engines may require additional fields depending on workflow, but
 the above set forms the "core" operational schema.
@@ -105,6 +109,7 @@ production version only in secure environments with appropriate access controls.
 from __future__ import annotations
 
 import re
+from numbers import Integral, Real
 from typing import Iterable
 import warnings
 
@@ -179,25 +184,35 @@ def _normalize_transaction_id(value) -> str | pd.NA:
     if pd.isna(value):
         return pd.NA
     
+    if isinstance(value, Integral) and not isinstance(value, bool):
+        return str(int(value))
+
+    if isinstance(value, Real) and not isinstance(value, Integral):
+        if pd.isna(value):
+            return pd.NA
+        if value.is_integer():
+            return str(int(value))
+        return pd.NA
+
     text = str(value).strip()
     if not text:
         return pd.NA
-    
-    text = re.sub(r"\D","",text)
+
+    m = re.fullmatch(r"(\d+)\.0+", text)
+    if m:
+        return m.group(1)
+
+    if re.fullmatch(r"\d+", text):
+        return text
+
+    if re.search(r"[A-Za-z]", text):
+        return pd.NA
+
+    text = re.sub(r"\D", "", text)
     if not text:
         return pd.NA
-    
 
-    # Find first numeric code characters before the ending 0: re.search(pattern, string) - if found returns match object, if not returns None.
-    # '(\d+): find any numerical digits (1 or more) and extract this part
-    # '0$': stop to extract when you reach literal '0'(zero)
-    m = re.search(r"(\d+)0$", text)
-    if not m:
-        return pd.NA
-    
-    
-    # .group(1) returns the part (...) from the match object returned by re.search()
-    return m.group(1) # e.g. '12345'
+    return text
 
 
 
@@ -361,6 +376,17 @@ def clean_matrix(
     # Transaction method (ACH / Wire / Check)
     if "txn_method" in df.columns:
         df["txn_method"] = normalize_text_series(df["txn_method"], strip=True, upper=False)
+
+    # Tax form and federal taxing method (kept as normalized text)
+    if "tax_form" in df.columns:
+        df["tax_form"] = normalize_text_series(df["tax_form"], strip=True, upper=False)
+
+    if "federal_taxing_method" in df.columns:
+        df["federal_taxing_method"] = normalize_text_series(
+            df["federal_taxing_method"],
+            strip=True,
+            upper=False,
+        )
     
     # Distribution type (Matrix perspective - keep raw but cleaned)
     if "dist_type" in df.columns:
@@ -368,7 +394,11 @@ def clean_matrix(
     
     # Convenience: participant name normalized
     if "participant_name" in df.columns:
-        df["partipant_name"] = normalize_text_series(df["participant_name"], strip=True, upper=False)
+        df["participant_name"] = normalize_text_series(
+            df["participant_name"],
+            strip=True,
+            upper=False,
+        )
 
     # Validation flags and issues
     ssn_valid = (

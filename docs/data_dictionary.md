@@ -134,7 +134,8 @@ When classifying discrepancies, the pipeline prioritizes based on engine output:
 1. **Engine A corrections** (inherited-plan tax code updates)
 2. **Engine B corrections** (age-based non-Roth tax codes)
 3. **Engine C corrections** (Roth taxable amount and Roth start year updates)
-4. **Review-only items** (INVESTIGATE) and date out-of-range flags
+4. **Engine D corrections** (IRA rollover tax-form audit)
+5. **Review-only items** (INVESTIGATE) and date out-of-range flags
 
 ### Match Tolerance Guidelines
 
@@ -183,10 +184,11 @@ When classifying discrepancies, the pipeline prioritizes based on engine output:
 | `gross_amt`                     | float  | `15000.00`   | Gross disbursement amount                              | 🔴 Matching key |
 | `fed_taxable_amt`               | float  | `15000.00`   | Taxable amount reported in Matrix                      | Engine C input |
 | `txn_date`                      | date   | `2024-01-17` | Matrix transaction date                                | Date lag |
-| `txn_method`                    | string | `ACH`        | Transaction method/type                                | Optional |
+| `txn_method`                    | string | `ACH`        | Transaction method/type                                | Engine D |
 | `tax_code_1`                    | string | `7`          | Primary 1099-R tax code                                | 🔴 Correction logic |
 | `tax_code_2`                    | string | `G`          | Secondary 1099-R tax code                              | Engine A/C |
-| `tax_form`                      | string | `1099-R`     | Tax form identifier                                    | Optional |
+| `tax_form`                      | string | `1099-R`     | Tax form identifier                                    | Engine D |
+| `federal_taxing_method`         | string | `Rollover`   | Federal taxing method                                 | Engine D |
 | `dist_type`                     | string | `Rollover`   | Distribution type                                      | Optional |
 | `roth_initial_contribution_year` | int   | `2016`       | Roth start year (Matrix)                               | Engine C |
 | `transaction_id`                | string | `44324568`   | Matrix transaction ID                                  | Output key |
