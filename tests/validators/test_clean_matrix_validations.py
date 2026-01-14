@@ -80,3 +80,19 @@ def test_clean_matrix_normalizes_participant_name() -> None:
 
     assert cleaned.loc[0, "participant_name"] == "Jane Doe"
     assert "partipant_name" not in cleaned.columns
+
+
+def test_clean_matrix_preserves_string_transaction_id() -> None:
+    raw_df = pd.DataFrame(
+        {
+            "Transaction Id": ["44324568"],
+            "Transaction Date": ["2025-01-01"],
+            "Client Account": ["PLAN1"],
+            "Participant SSN": ["123456780"],
+            "Gross Amount": [100.0],
+        }
+    )
+
+    cleaned = clean_matrix(raw_df, drop_rows_missing_keys=False)
+
+    assert cleaned.loc[0, "transaction_id"] == "44324568"
