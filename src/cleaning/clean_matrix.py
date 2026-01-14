@@ -109,6 +109,7 @@ production version only in secure environments with appropriate access controls.
 from __future__ import annotations
 
 import re
+from numbers import Integral, Real
 from typing import Iterable
 import warnings
 
@@ -183,25 +184,35 @@ def _normalize_transaction_id(value) -> str | pd.NA:
     if pd.isna(value):
         return pd.NA
     
+    if isinstance(value, Integral) and not isinstance(value, bool):
+        return str(int(value))
+
+    if isinstance(value, Real) and not isinstance(value, Integral):
+        if pd.isna(value):
+            return pd.NA
+        if value.is_integer():
+            return str(int(value))
+        return pd.NA
+
     text = str(value).strip()
     if not text:
         return pd.NA
-    
-    text = re.sub(r"\D","",text)
+
+    m = re.fullmatch(r"(\d+)\.0+", text)
+    if m:
+        return m.group(1)
+
+    if re.fullmatch(r"\d+", text):
+        return text
+
+    if re.search(r"[A-Za-z]", text):
+        return pd.NA
+
+    text = re.sub(r"\D", "", text)
     if not text:
         return pd.NA
-    
 
-    # Find first numeric code characters before the ending 0: re.search(pattern, string) - if found returns match object, if not returns None.
-    # '(\d+): find any numerical digits (1 or more) and extract this part
-    # '0$': stop to extract when you reach literal '0'(zero)
-    m = re.search(r"(\d+)0$", text)
-    if not m:
-        return pd.NA
-    
-    
-    # .group(1) returns the part (...) from the match object returned by re.search()
-    return m.group(1) # e.g. '12345'
+    return text
 
 
 
