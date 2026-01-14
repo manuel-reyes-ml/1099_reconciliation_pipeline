@@ -69,6 +69,7 @@ For readers unfamiliar with retirement plan administration:
 2. **Which mismatches have direct 1099-R impact (amounts, codes, Roth taxable)?**
 3. **Can we separate inherited, age-based, and Roth-specific rules cleanly?**
 4. **How can we generate a correction file for the operations team?**
+5. **Are IRA rollover tax forms aligned with rollover treatment in Matrix?**
 
 ---
 
@@ -105,10 +106,11 @@ Build an automated **1099 reconciliation pipeline** that:
 
 1. **Ingests** Excel exports from Relius distributions, Relius demographics, Relius Roth basis, and Matrix.  
 2. **Cleans and normalizes** the data into canonical fields (SSNs, dates, amounts, tax codes).  
-3. **Runs three engines**:
+3. **Runs four engines**:
    - Engine A: inherited-plan matching (Relius vs Matrix)
    - Engine B: age-based non-Roth tax codes
    - Engine C: Roth taxable + Roth tax-code logic
+   - Engine D: IRA rollover tax-form audit (Matrix-only)
 4. **Classifies** results into match statuses and correction/review actions.
 5. **Generates** an **Excel correction file** with recommended updates, stored under `reports/samples/<engine>/` for sample runs and `reports/outputs/<engine>/` for production runs by default.
 
@@ -160,6 +162,7 @@ Build an automated **1099 reconciliation pipeline** that:
   - exported_date/txn_date with a config-driven lag window
 - Engine B age-based tax-code logic using Relius demographics
 - Engine C Roth taxable logic using Relius Roth basis and Roth plan identifiers
+- Engine D IRA rollover tax-form checks using Matrix `federal_taxing_method`, `tax_form`, and `txn_method`
 - Classifying results and generating:
   - A **1099 correction Excel file**
 - Using **synthetic data** in this public repository.
@@ -303,6 +306,9 @@ To keep changes reliable and auditable, this repository includes automated testi
                   └─────────────┘     └───────────┘
 ```
 
+Engine D (IRA rollover audit) runs on the cleaned Matrix export to validate
+rollover tax-form selections and produces a correction file when needed.
+
 ### Detailed Process Steps
 
 1. **Data Ingestion**
@@ -328,7 +334,12 @@ To keep changes reliable and auditable, this repository includes automated testi
    - Identify Roth plans via configured prefixes/suffixes
    - Suggest taxable amount, Roth start year, and Roth tax codes (B*, H*)
 
-6. **Output Generation**
+6. **Engine D (IRA Rollover Tax-Form Audit)**
+   - Filter IRA plans and check distributions in Matrix
+   - Validate `federal_taxing_method = Rollover` against tax form selection
+   - Suggest correction (`new_tax_code = "0"`) when 1099-R is set
+
+7. **Output Generation**
    - Build correction file with `match_status`, suggested fields, and actions
    - Provide correction reasons for audit and review workflows
 

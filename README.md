@@ -6,13 +6,13 @@
 ![Status](https://img.shields.io/badge/Status-Portfolio-brightgreen)
 ![CI](https://github.com/manuel-reyes-ml/1099_reconciliation_pipeline/actions/workflows/ci.yml/badge.svg?branch=main)
 
-Automated data pipeline for **reconciling retirement plan distributions** between Relius (distribution exports) and Matrix (disbursement/1099 exports). Standardizes inputs, runs three matching/correction engines (A/B/C), and produces Matrix-ready correction recommendations (tax codes, taxable amount, Roth basis year).
+Automated data pipeline for **reconciling retirement plan distributions** between Relius (distribution exports) and Matrix (disbursement/1099 exports). Standardizes inputs, runs four matching/correction engines (A/B/C/D), and produces Matrix-ready correction recommendations (tax codes, taxable amount, Roth basis year).
 
 > 🛡️ **Privacy First:** All data in this repository is synthetic. Original project built for production with real participant data (SSN, tax codes) - cannot be shared for compliance reasons.
 
 ### Recruiter Pitch
 
-I built this project to showcase **both Data Engineering and Data Analytics in a real finance workflow**: ingesting messy Excel exports from Relius and Matrix (plus Relius demographics and Roth basis extracts), normalizing them into a canonical schema, applying auditable business rules across **Engine A (inherited plan matching)**, **Engine B (age-based non-Roth tax codes)**, and **Engine C (Roth taxable + Roth tax-code logic)**, and generating **Matrix-ready 1099-R correction files** for review and execution.
+I built this project to showcase **both Data Engineering and Data Analytics in a real finance workflow**: ingesting messy Excel exports from Relius and Matrix (plus Relius demographics and Roth basis extracts), normalizing them into a canonical schema, applying auditable business rules across **Engine A (inherited plan matching)**, **Engine B (age-based non-Roth tax codes)**, **Engine C (Roth taxable + Roth tax-code logic)**, and **Engine D (IRA rollover tax-form audit)**, and generating **Matrix-ready 1099-R correction files** for review and execution.
 
 ---
 
@@ -100,10 +100,11 @@ Total Transactions Processed: 10,247
 - Date lag tolerance enforced from `MATCHING_CONFIG` (Matrix txn_date occurs after Relius export)
 - Explicit match_status labels: match_no_action, match_needs_correction, date_out_of_range, unmatched_relius, unmatched_matrix
 
-### 🧩 **Engines A/B/C**
+### 🧩 **Engines A/B/C/D**
 - **Engine A (Inherited matching):** Reconciles Relius vs Matrix distributions and applies inherited-plan tax-code rules (4/G).
 - **Engine B (Age-based, non-Roth):** Uses Relius demo data (DOB/term date) to suggest non-Roth tax codes (1/2/7); excludes rollovers and inherited plans.
 - **Engine C (Roth taxable):** Uses Matrix + Relius demo + Roth basis to suggest taxable amount, Roth initial year, and Roth tax codes; excludes inherited plans but does not exclude rollovers.
+- **Engine D (IRA rollover tax-form audit):** Filters IRA check distributions with federal taxing method = rollover, then flags tax-form mismatches for correction.
 
 ### 📈 **Business Intelligence**
 - Review-ready outputs: match_status, correction_reason, and action fields for QA
@@ -125,7 +126,7 @@ Total Transactions Processed: 10,247
 **Key Decisions:**
 - Define match criteria (plan_id + ssn + gross_amt with date lag tolerance)
 - Centralize thresholds in `config.py` (MATCHING_CONFIG, AGE_TAXCODE_CONFIG, ROTH_TAXABLE_CONFIG)
-- Separate workflows into Engine A/B/C to keep rules auditable
+- Separate workflows into Engine A/B/C/D to keep rules auditable
 
 ---
 
@@ -218,6 +219,7 @@ WHERE r.plan_id = m.plan_id
 1. Inherited-plan corrections (Engine A: code 4/G rules)
 2. Age-based non-Roth corrections (Engine B: 1/2/7 rules)
 3. Roth taxable + Roth tax-code corrections (Engine C: taxable amount, start year, B* rules)
+4. IRA rollover tax-form audit (Engine D: Matrix-only rollover vs tax-form checks)
 
 ---
 
@@ -301,12 +303,14 @@ New First Year contrib | Reason | Action
 │   │   ├── __init__.py
 │   │   ├── match_planid.py             # Engine A (inherited matching)
 │   │   ├── age_taxcode_analysis.py     # Engine B (age-based non-Roth)
-│   │   └── roth_taxable_analysis.py    # Engine C (Roth taxable)
+│   │   ├── roth_taxable_analysis.py    # Engine C (Roth taxable)
+│   │   └── ira_rollover_analysis.py    # Engine D (IRA rollover tax-form audit)
 │   ├── visualization/
 │   │   ├── __init__.py
 │   │   ├── match_planid_visualization.py
 │   │   ├── age_taxcode_visualization.py
-│   │   └── roth_taxable_visualization.py
+│   │   ├── roth_taxable_visualization.py
+│   │   └── ira_rollover_visualization.py
 │   └── outputs/
 │       ├── __init__.py
 │       ├── export_utils.py             # Export helpers
@@ -321,25 +325,31 @@ New First Year contrib | Reason | Action
 │   ├── 05_match_roth_basis_analysis.ipynb
 │   ├── 06_age_taxcode_visualization.ipynb
 │   ├── 07_match_planid_visualization.ipynb
-│   └── 08_roth_taxable_visualization.ipynb
+│   ├── 08_roth_taxable_visualization.ipynb
+│   ├── 09_ira_rollover_analysis.ipynb
+│   └── 10_ira_rollover_visualization.ipynb
 │
 ├── reports/
 │   ├── figures/                        # Generated charts (png)
 │   │   ├── match_planid/
 │   │   ├── age_taxcode/
-│   │   └── roth_taxable/
+│   │   ├── roth_taxable/
+│   │   └── ira_rollover/
 │   ├── outputs/                        # Timestamped correction files (production default)
 │   │   ├── match_planid/
 │   │   ├── age_taxcode/
-│   │   └── roth_taxable/
+│   │   ├── roth_taxable/
+│   │   └── ira_rollover/
 │   └── samples/                        # Sample-mode outputs
 │       ├── figures/                    # Sample-mode charts
 │       │   ├── match_planid/
 │       │   ├── age_taxcode/
-│       │   └── roth_taxable/
+│       │   ├── roth_taxable/
+│       │   └── ira_rollover/
 │       ├── match_planid/
 │       ├── age_taxcode/
-│       └── roth_taxable/
+│       ├── roth_taxable/
+│       └── ira_rollover/
 │
 ├── templates/
 │   └── 1099r_correct_form.xlsx         # Matrix correction template
@@ -347,6 +357,7 @@ New First Year contrib | Reason | Action
 ├── tests/                              # Unit tests (optional)
 │   ├── conftest.py
 │   ├── pipelines/
+│   ├── ira_rollover/
 │   ├── roth_taxable/
 │   ├── validators/
 │   └── visualization/
@@ -457,7 +468,9 @@ jupyter notebook
 # 7. notebooks/06_age_taxcode_visualization.ipynb
 # 8. notebooks/07_match_planid_visualization.ipynb
 # 9. notebooks/08_roth_taxable_visualization.ipynb
-# (Engine B/C workflows are covered in 04-06 and 07-08 or can be run from scripts)
+# 10. notebooks/09_ira_rollover_analysis.ipynb
+# 11. notebooks/10_ira_rollover_visualization.ipynb
+# (Engine B/C/D workflows are covered in 04-06 and 07-10 or can be run from scripts)
 ```
 
 #### Option 3: Use as Module
