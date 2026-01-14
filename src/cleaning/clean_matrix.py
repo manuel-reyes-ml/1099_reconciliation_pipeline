@@ -51,6 +51,8 @@ Core transformations
        Normalize to 1–2 leading characters (e.g., "7", "11", "G", "H") from
        strings like "7 - Normal Distribution". This prevents accidental truncation
        and supports multi-digit codes.
+   - Tax form (`tax_form`) and Federal taxing method (`federal_taxing_method`):
+       Normalize to consistent text casing/whitespace for downstream rules.
    - Roth initial contribution year (`roth_initial_contribution_year`):
        Convert to numeric and store as pandas nullable integer (Int64).
    - Text fields (participant name, state, plan_id, transaction type):
@@ -82,6 +84,8 @@ Typical canonical columns produced by this module include:
 - gross_amt
 - tax_code_1
 - tax_code_2
+- tax_form
+- federal_taxing_method
 
 Downstream engines may require additional fields depending on workflow, but
 the above set forms the "core" operational schema.
@@ -361,6 +365,17 @@ def clean_matrix(
     # Transaction method (ACH / Wire / Check)
     if "txn_method" in df.columns:
         df["txn_method"] = normalize_text_series(df["txn_method"], strip=True, upper=False)
+
+    # Tax form and federal taxing method (kept as normalized text)
+    if "tax_form" in df.columns:
+        df["tax_form"] = normalize_text_series(df["tax_form"], strip=True, upper=False)
+
+    if "federal_taxing_method" in df.columns:
+        df["federal_taxing_method"] = normalize_text_series(
+            df["federal_taxing_method"],
+            strip=True,
+            upper=False,
+        )
     
     # Distribution type (Matrix perspective - keep raw but cleaned)
     if "dist_type" in df.columns:
