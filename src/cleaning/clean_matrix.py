@@ -383,7 +383,11 @@ def clean_matrix(
     
     # Convenience: participant name normalized
     if "participant_name" in df.columns:
-        df["partipant_name"] = normalize_text_series(df["participant_name"], strip=True, upper=False)
+        df["participant_name"] = normalize_text_series(
+            df["participant_name"],
+            strip=True,
+            upper=False,
+        )
 
     # Validation flags and issues
     ssn_valid = (
