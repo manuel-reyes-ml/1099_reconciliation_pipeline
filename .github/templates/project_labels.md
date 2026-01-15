@@ -14,6 +14,7 @@ gh label create "priority: P2"   --description "Normal priority"                
 gh label create "engine: A-reconcile"     --description "Relius ↔ Matrix reconciliation engine" || true
 gh label create "engine: B-age"           --description "Age-based tax code engine"            || true
 gh label create "engine: C-roth-taxable"  --description "Roth taxable + basis engine"          || true
+gh label create "engine: D-ira-rollover"  --description "IRA rollover engine"          || true
 
 # Areas
 gh label create "area: config"     --description "Config/schema mappings"            || true
