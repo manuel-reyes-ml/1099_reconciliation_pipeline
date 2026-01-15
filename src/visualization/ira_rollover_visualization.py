@@ -1,7 +1,8 @@
 """
 ira_rollover_visualization.py
 
-Helpers for summarizing and visualizing Engine D (ira_rollover_analysis) output.
+Helpers for summarizing and visualizing Engine D (ira_rollover_analysis) output
+filtered to G/H tax-code rows.
 """
 
 from __future__ import annotations
@@ -35,6 +36,8 @@ def build_ira_rollover_kpi_summary(df: pd.DataFrame) -> pd.DataFrame:
 
     Required columns:
       - match_status
+
+    Assumes rows are already filtered to G/H tax-code entries.
     """
 
     _validate_required_columns(df, ["match_status"])
@@ -81,7 +84,7 @@ def plot_ira_rollover_kpi_summary(
 
     ax.barh(order, percents, color="#72B7B2")
     ax.set_xlabel("Percent of Records")
-    ax.set_title("Engine D Match Status Summary")
+    ax.set_title("Engine D Match Status Summary (G/H tax codes)")
 
     max_pct = float(percents.max() if len(percents) else 0)
     ax.set_xlim(0, max(10.0, max_pct * 1.15))
@@ -104,6 +107,8 @@ def build_ira_rollover_metrics(df: pd.DataFrame) -> pd.DataFrame:
     Required columns:
       - txn_date
       - match_status
+
+    Assumes rows are already filtered to G/H tax-code entries.
     """
 
     _validate_required_columns(df, ["txn_date", "match_status"])
@@ -170,7 +175,7 @@ def plot_ira_rollover_correction_counts(
     )
     ax.set_xlabel("Transaction Month")
     ax.set_ylabel("Count")
-    ax.set_title("Engine D Monthly Corrections vs Total")
+    ax.set_title("Engine D Monthly Corrections vs Total (G/H tax codes)")
     ax.legend()
     fig.autofmt_xdate()
 
@@ -199,7 +204,7 @@ def plot_ira_rollover_correction_rate(
     ax.plot(months, rate, marker="o", linewidth=2, color="#54A24B")
     ax.set_xlabel("Transaction Month")
     ax.set_ylabel("Correction Rate (%)")
-    ax.set_title("Engine D Correction Rate Over Time")
+    ax.set_title("Engine D Correction Rate Over Time (G/H tax codes)")
 
     max_rate = float(rate.max() if len(rate) else 0)
     ax.set_ylim(0, max(5.0, max_rate * 1.2))
