@@ -22,6 +22,7 @@ reports/outputs/*.xlsx
 reports/outputs/age_taxcode/*.xlsx
 reports/outputs/match_planid/*.xlsx
 reports/outputs/roth_taxable/*.xlsx
+reports/outputs/ira_rollover/*.xlsx
 reports/*.xlsx
 reports/*.csv
 
