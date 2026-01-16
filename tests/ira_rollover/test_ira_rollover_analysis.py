@@ -16,6 +16,7 @@ def test_run_ira_rollover_analysis_filters_and_classifies() -> None:
             ],
             "federal_taxing_method": ["Rollover", "rollover", "Rollover", "Rollover"],
             "tax_form": ["No Tax", "1099-R", "No Tax", "No Tax"],
+            "tax_code_1": ["G", "H", "7", "G"],
             "transaction_id": ["tx1", "tx2", "tx3", "tx4"],
             "txn_date": [
                 pd.Timestamp("2025-01-10"),
@@ -60,6 +61,8 @@ def test_run_ira_rollover_analysis_review_reasons() -> None:
             ],
             "federal_taxing_method": [pd.NA, "Rollover", "Taxable", "Rollover"],
             "tax_form": ["No Tax", pd.NA, "No Tax", "Other Form"],
+            "tax_code_1": ["G", "", "H", "G"],
+            "tax_code_2": ["", "H", "", ""],
             "transaction_id": [
                 "tx_missing_ftm",
                 "tx_missing_tax_form",
