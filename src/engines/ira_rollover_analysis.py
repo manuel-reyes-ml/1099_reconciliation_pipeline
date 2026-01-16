@@ -32,7 +32,7 @@ from ..config import (
     IRA_ROLLOVER_CONFIG,
     MATCH_STATUS_CONFIG,
 )
-from ..core.normalizers import apply_date_filter, _append_reason
+from ..core.normalizers import apply_date_filter, normalize_tax_code_series, _append_reason
 
 
 def _validate_required_columns(df: pd.DataFrame, required_cols: list[str]) -> None:
@@ -108,6 +108,14 @@ def run_ira_rollover_analysis(
     check_distribution_mask = txn_method_norm == "check distribution"
 
     df = df[ira_mask & check_distribution_mask].copy()
+    tax_code_1 = normalize_tax_code_series(
+        df.get("tax_code_1", pd.Series(pd.NA, index=df.index))
+    ).fillna("")
+    tax_code_2 = normalize_tax_code_series(
+        df.get("tax_code_2", pd.Series(pd.NA, index=df.index))
+    ).fillna("")
+    rollover_tax_code_mask = tax_code_1.isin(["G", "H"]) | tax_code_2.isin(["G", "H"])
+    df = df[rollover_tax_code_mask].copy()
 
     df["match_status"] = status_cfg.needs_review
     df["action"] = pd.NA

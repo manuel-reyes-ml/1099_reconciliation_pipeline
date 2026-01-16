@@ -45,7 +45,7 @@ For quick orientation, these are the most impactful rules:
 4. **🎂 Age rule (Engine B):** age at distribution **≥ 59.5 → code 7** (non-Roth).
 5. **👔 Termination rule (Engine B):** if <59.5 and term date exists, **55+ at term → code 2**, otherwise **code 1**.
 6. **🅱️ Roth rule (Engine C):** Roth plans use taxable/basis logic and enforce Roth tax codes (B* for non-rollover, H for rollovers).
-7. **🏦 IRA rollover tax-form rule (Engine D):** IRA plan check distributions with federal taxing method = rollover should be Tax Form **No Tax**; `1099-R` requires correction (`new_tax_code = "0"`).
+7. **🏦 IRA rollover tax-form rule (Engine D):** IRA plan check distributions with `tax_code_1` or `tax_code_2` of G/H should be Tax Form **No Tax** when federal taxing method = rollover; `1099-R` requires correction (`new_tax_code = "0"`).
 
 ---
 
@@ -496,17 +496,18 @@ Engine C emits:
 ## 6. Engine D — IRA Rollover Tax-Form Audit
 
 ### 6.1 Purpose
-Engine D audits IRA rollover check distributions in Matrix without matching to
-Relius. It verifies that rollover transactions are labeled with the correct
-tax form (No Tax vs 1099-R).
+Engine D audits IRA rollover-coded check distributions in Matrix without
+matching to Relius. It verifies that rollover transactions are labeled with the
+correct tax form (No Tax vs 1099-R).
 
 ### 6.2 Filters (Matrix-only)
 - IRA plans: `plan_id` contains configured IRA substrings (default: "IRA") or
   starts with configured prefixes (default: `300001`, `300005`).
 - Transaction Type: normalized `txn_method` == "Check Distribution".
-- Federal Taxing Method: normalized to compare against `Rollover`.
+- Tax codes: normalized `tax_code_1` or `tax_code_2` is `G` or `H`.
 
 ### 6.3 Classification rules
+Only rows with G/H tax codes are evaluated.
 - **Rollover + Tax Form "No Tax"** → `match_no_action`
 - **Rollover + Tax Form "1099-R"** → `match_needs_correction`,
   `action = UPDATE_1099`, `suggested_tax_code_1 = "0"`, `new_tax_code = "0"`
