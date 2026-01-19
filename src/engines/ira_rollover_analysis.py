@@ -154,6 +154,7 @@ def run_ira_rollover_analysis(
     df.loc[mask_correction, "action"] = "UPDATE_1099"
     df.loc[mask_correction, "suggested_tax_code_1"] = "0"
     df.loc[mask_correction, "new_tax_code"] = "0"
+    df.loc[df["match_status"] == status_cfg.needs_review, "action"] = "INVESTIGATE"
     df["correction_reason"] = df["correction_reasons"].apply(
         lambda reasons: "; ".join(reasons) if reasons else pd.NA
     )
