@@ -336,8 +336,16 @@ def test_build_correction_dataframe_exports_taxable_or_year_updates() -> None:
     assert set(corrections_df["Transaction Id"]) == {
         "tx_taxable_update",
         "tx_year_update",
+        "tx_investigate",
+        "tx_review",
     }
-    taxable_row = corrections_df.set_index("Transaction Id").loc["tx_taxable_update"]
-    year_row = corrections_df.set_index("Transaction Id").loc["tx_year_update"]
+    indexed = corrections_df.set_index("Transaction Id")
+    taxable_row = indexed.loc["tx_taxable_update"]
+    year_row = indexed.loc["tx_year_update"]
+    investigate_row = indexed.loc["tx_investigate"]
+    review_row = indexed.loc["tx_review"]
     assert taxable_row["New Taxable Amount"] == 0.0
     assert year_row["New First Year contrib"] == 2020
+    assert investigate_row["New Taxable Amount"] == 10.0
+    assert review_row["New Taxable Amount"] == 5.0
+    assert review_row["New First Year contrib"] == 2020
