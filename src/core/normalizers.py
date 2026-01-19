@@ -7,6 +7,8 @@ Shared normalization helpers for canonical data cleaning across engines.
 Includes age attainment and Roth plan detection utilities used by analysis
 engines to keep business logic consistent across modules. Validation helpers
 live in `core.validators`.
+Correction export helpers normalize action tokens and split rows into action
+groups for multi-tab outputs.
 
 Design goals
 ------------
@@ -31,6 +33,7 @@ Public API
 - normalize_state_series(series) -> pd.Series
 - normalize_tax_code_series(series) -> pd.Series
 - apply_date_filter(df, date_col, date_filter=None) -> pd.DataFrame
+- split_corrections_by_action(corrections_df) -> dict[str, pd.DataFrame]
 
 Internal helpers
 ----------------
@@ -234,6 +237,38 @@ def normalize_tax_code_series(series: pd.Series) -> pd.Series:
     codes = s.str.extract(r"^\s*([A-Za-z0-9]{1,2})", expand=False)
     codes = codes.str.upper()     # '.str' vectorize to the whole Series
     return codes.astype("string") # .astype("string") convert to pandas string dtype(with <NA> for missing)
+
+
+def _normalize_action_tokens(action_val: object) -> list[str]:
+    if pd.isna(action_val):
+        return []
+    parts = str(action_val).splitlines()
+    return [part.strip().upper() for part in parts if part.strip()]
+
+
+def split_corrections_by_action(corrections_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """
+    Split corrections into separate DataFrames for UPDATE_1099 and INVESTIGATE actions.
+
+    Rows with both actions are duplicated into both outputs.
+    """
+    if corrections_df.empty:
+        empty = corrections_df.iloc[:0].copy()
+        return {"Correction": empty.copy(), "Investigate": empty.copy()}
+
+    action_col = "Action" if "Action" in corrections_df.columns else "action"
+    if action_col not in corrections_df.columns:
+        empty = corrections_df.iloc[:0].copy()
+        return {"Correction": empty.copy(), "Investigate": empty.copy()}
+
+    action_tokens = corrections_df[action_col].apply(_normalize_action_tokens)
+    mask_update = action_tokens.apply(lambda tokens: "UPDATE_1099" in tokens)
+    mask_investigate = action_tokens.apply(lambda tokens: "INVESTIGATE" in tokens)
+
+    return {
+        "Correction": corrections_df.loc[mask_update].copy(),
+        "Investigate": corrections_df.loc[mask_investigate].copy(),
+    }
 
 
 def _to_datetime(series: pd.Series) -> pd.Series:
