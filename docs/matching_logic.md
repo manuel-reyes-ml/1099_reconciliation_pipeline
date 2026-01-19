@@ -536,8 +536,8 @@ The following status values appear across engine outputs:
 `outputs/build_correction_file.py` expects engines to provide:
 
 ### 8.1 Required fields (minimum)
-- `match_status` (must be `match_needs_correction` to export)
-- `suggested_tax_code_1` (required)
+- `match_status` (must be `match_needs_correction` or `match_needs_review` to export)
+- `suggested_tax_code_1` (required for UPDATE_1099 rows)
 - `transaction_id` (Matrix)
 - `txn_date` (Matrix)
 - `ssn`
@@ -552,6 +552,11 @@ The following status values appear across engine outputs:
 - `plan_id`
 - `action` (may contain multiple lines), `correction_reason`
 
+`write_correction_file` writes a single workbook with two tabs per engine:
+`Correction` (UPDATE_1099) and `Investigate` (INVESTIGATE). Rows with both
+actions appear in both tabs with identical values. Action matching is
+case-insensitive and splits multi-line values.
+
 Default output location for `write_correction_file` follows `USE_SAMPLE_DATA_DEFAULT`: `reports/samples/<engine>/` in sample mode and `reports/outputs/<engine>/` in production mode when an engine is provided. If engine is omitted, outputs stay under `reports/samples/` or `reports/outputs/`. An explicit `output_path` overrides these defaults.
 Figure outputs from visualization notebooks follow `USE_SAMPLE_DATA_DEFAULT`: `reports/samples/figures/<engine>/` in sample mode and `reports/figures/<engine>/` in production.
 
@@ -564,7 +569,7 @@ Before delivering a correction file:
 ### 9.1 Engine A validation
 - ✅ Confirm `MATCHING_CONFIG.max_date_lag_days` reflects operational reality
 - ✅ Spot-check a sample of `date_out_of_range` rows
-- ✅ Verify no duplicate Matrix `transaction_id` in final correction output
+- ✅ Verify no duplicate Matrix `transaction_id` within each correction tab
 - ✅ Verify inherited plans only apply inherited tax code rules
 
 ### 9.2 Engine B validation
@@ -598,7 +603,7 @@ Before delivering a correction file:
 - **Plan naming variants (🟡):** Roth detection uses pattern rules; adjust if additional variants appear.
 - **Roth rollovers (🔴):** rollovers are not excluded; they should normalize to `H` and still receive taxable/basis checks.
 - **Missing/invalid Roth basis year (🟡):** Engine C flags `INVESTIGATE` rather than suggesting a year update.
-- **Multi-action outputs (🟡):** Engine C may emit multi-line `action` values; correction builder handles line-splitting.
+- **Multi-action outputs (🟡):** Engine C may emit multi-line `action` values; correction builder splits them and duplicates rows across tabs.
 - **IRA tax-form inputs (🟡):** missing `federal_taxing_method` or `tax_form` yield review status; normalize whitespace/casing for `Check Distribution`.
 - **IRA plan detection (🟡):** `plan_id` substring matches (e.g., "IRA") can be over-inclusive; adjust config if false positives appear.
 
