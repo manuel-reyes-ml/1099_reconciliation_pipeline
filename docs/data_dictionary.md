@@ -448,6 +448,8 @@ dropping records:
 ## 4. Correction File Fields
 
 The final correction Excel file (e.g. `reports/samples/<engine>/correction_file_YYYYMMDD_HHMMSS.xlsx` in sample mode or `reports/outputs/<engine>/correction_file_YYYYMMDD_HHMMSS.xlsx` in production mode) includes a curated set of fields designed for the **operations team**.
+Each workbook includes two tabs: `Correction` (UPDATE_1099) and `Investigate`
+(INVESTIGATE). Rows with both actions are duplicated into both tabs.
 
 | Column Name | Type | Example | Description |
 |-------------|------|---------|-------------|
@@ -465,6 +467,9 @@ The final correction Excel file (e.g. `reports/samples/<engine>/correction_file_
 | `Action` | string | `UPDATE_1099` | Recommended action |
 
 ### Action Codes
+
+The `Correction` tab includes UPDATE_1099 rows, while the `Investigate` tab
+includes INVESTIGATE rows.
 
 | Action Code | When Used | Operations Response |
 |------------|-----------|-------------------|

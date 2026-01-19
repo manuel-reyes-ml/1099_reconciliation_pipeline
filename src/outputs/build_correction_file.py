@@ -114,14 +114,17 @@ from ..config import (
     get_engine_outputs_dir,
     get_engine_samples_dir,
 )         # Relative import from the config module.
+from ..core.normalizers import _normalize_action_tokens, split_corrections_by_action
+from .export_utils import write_multi_sheet_excel
 
 
 
 # --- Core funtions ------------------------------------------------------------
 
+
 def build_correction_dataframe(
         matches: pd.DataFrame,
-        allowed_actions: Optional[Iterable[str]] = ("UPDATE_1099",),
+        allowed_actions: Optional[Iterable[str]] = ("UPDATE_1099", "INVESTIGATE"),
 ) -> pd.DataFrame:
     
     """
@@ -144,8 +147,9 @@ def build_correction_dataframe(
         - correction_reason
     
     We select rows that:
-        - have match_status == 'match_needs_correction'
-        - have at least one actionable suggestion (tax code or taxable/year)
+        - have match_status in ('match_needs_correction', 'match_needs_review')
+        - have at least one actionable suggestion (tax code or taxable/year), or
+          are explicitly flagged for INVESTIGATE
         - (optionally) have an 'action' in allowed_action
         - and, if colums exist, are within date tolerance and present in both systems.
 
@@ -166,7 +170,9 @@ def build_correction_dataframe(
     df = matches.copy()
 
     # 1) Basic correction condition: status + actionable suggestion present
-    mask_needs_corr = df["match_status"].eq("match_needs_correction")  # .eq -> is Series 1 equal to Series 2, returns a boolean Series(True / False)
+    mask_needs_corr = df["match_status"].isin(
+        ["match_needs_correction", "match_needs_review"]
+    )
     mask_has_suggestion = pd.Series(False, index=df.index)
     for col in [
         "suggested_tax_code_1",
@@ -189,15 +195,27 @@ def build_correction_dataframe(
                                                                        # '&=' -> means elementwise AND + assignment. Mean:
                                                                        #    mask_in_range = mask_in_range & df["date_within_tolerance"].fillna("False")
     
+    action_tokens = None
+    if "action" in df.columns:
+        action_tokens = df["action"].apply(_normalize_action_tokens)
+
+    mask_has_investigate = pd.Series(False, index=df.index)
+    if action_tokens is not None:
+        mask_has_investigate = action_tokens.apply(lambda tokens: "INVESTIGATE" in tokens)
+    mask_has_suggestion |= mask_has_investigate
+
     # 3) Filter by allowed actions if 'action' column exists
-    if "action" in df.columns and allowed_actions is not None:
-        allowed_actions = set(allowed_actions)                         # Converts to Set for faster membership checks.
-        def _has_allowed(action_val):
-            if pd.isna(action_val):
-                return False
-            parts = str(action_val).splitlines()
-            return any(part in allowed_actions for part in parts)
-        mask_action = df["action"].apply(_has_allowed)               # multi-action aware
+    if action_tokens is not None and allowed_actions is not None:
+        allowed_actions = {
+            str(action).strip().upper()
+            for action in allowed_actions
+            if pd.notna(action)
+        }
+
+        def _has_allowed(tokens: list[str]) -> bool:
+            return any(token in allowed_actions for token in tokens)
+
+        mask_action = action_tokens.apply(_has_allowed)               # multi-action aware
     else:
         mask_action = pd.Series(True, index=df.index)                  # Creates a Series of True, for the lenght(rows) of df.
 
@@ -296,7 +314,7 @@ def write_correction_file(
     
     """
 
-    Write the correction DataFrame to an Excel file.
+    Write the correction DataFrame to a dual-tab Excel file.
 
     Args:
         corrections_df:
@@ -335,8 +353,10 @@ def write_correction_file(
         output_path = Path(output_path)                                # Conver it to a Path object for consistent handling.
         output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    corrections_df.to_excel(output_path, index=False)                  # Writes the DataDrame to an Excel '.xlsx' file.
-                                                                       # index=False -> don't include pandas row index as a separate column.
+    sheets = split_corrections_by_action(corrections_df)
+    columns = list(corrections_df.columns)
+    sheets = {name: df.reindex(columns=columns) for name, df in sheets.items()}
+    write_multi_sheet_excel(sheets, output_path, index=False)
 
     return output_path                                                 # You return a Path pointing to the saved file.
 

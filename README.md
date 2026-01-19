@@ -510,6 +510,8 @@ Total corrections: 6
 ```
 
 Production default uses `reports/outputs/<engine>/correction_file_[date].xlsx` when `USE_SAMPLE_DATA_DEFAULT=False` and an engine is provided.
+Each correction workbook includes two sheets: `Correction` (UPDATE_1099) and
+`Investigate` (INVESTIGATE). Rows with both actions appear in both sheets.
 
 **Files Created (default output):**
 - `reports/samples/<engine>/correction_file_[date].xlsx` - Sample mode default

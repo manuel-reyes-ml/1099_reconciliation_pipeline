@@ -104,6 +104,29 @@ def test_run_ira_rollover_analysis_review_reasons() -> None:
     ]
 
 
+def test_run_ira_rollover_analysis_sets_investigate_action_for_review() -> None:
+    df = pd.DataFrame(
+        {
+            "plan_id": ["300001XYZ"],
+            "txn_method": ["Check Distribution"],
+            "federal_taxing_method": [pd.NA],
+            "tax_form": ["No Tax"],
+            "tax_code_1": ["G"],
+            "tax_code_2": [""],
+            "transaction_id": ["tx_review_action"],
+            "txn_date": [pd.Timestamp("2025-03-01")],
+            "ssn": ["123456780"],
+            "matrix_account": ["acct1"],
+            "participant_name": ["A"],
+        }
+    )
+
+    result = run_ira_rollover_analysis(df).set_index("transaction_id")
+
+    assert result.loc["tx_review_action", "match_status"] == "match_needs_review"
+    assert result.loc["tx_review_action", "action"] == "INVESTIGATE"
+
+
 def test_run_ira_rollover_analysis_missing_columns() -> None:
     df = pd.DataFrame(
         {
