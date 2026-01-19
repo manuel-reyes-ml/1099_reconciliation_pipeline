@@ -265,9 +265,17 @@ def split_corrections_by_action(corrections_df: pd.DataFrame) -> dict[str, pd.Da
     mask_update = action_tokens.apply(lambda tokens: "UPDATE_1099" in tokens)
     mask_investigate = action_tokens.apply(lambda tokens: "INVESTIGATE" in tokens)
 
+    correction_df = corrections_df.loc[mask_update].copy()
+    investigate_df = corrections_df.loc[mask_investigate].copy()
+
+    if not correction_df.empty:
+        correction_df.loc[:, action_col] = "UPDATE_1099"
+    if not investigate_df.empty:
+        investigate_df.loc[:, action_col] = "INVESTIGATE"
+
     return {
-        "Correction": corrections_df.loc[mask_update].copy(),
-        "Investigate": corrections_df.loc[mask_investigate].copy(),
+        "Correction": correction_df,
+        "Investigate": investigate_df,
     }
 
 
