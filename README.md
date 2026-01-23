@@ -104,7 +104,7 @@ Total Transactions Processed: 10,247
 - **Engine A (Inherited matching):** Reconciles Relius vs Matrix distributions and applies inherited-plan tax-code rules (4/G).
 - **Engine B (Age-based, non-Roth):** Uses Relius demo data (DOB/term date) to suggest non-Roth tax codes (1/2/7); excludes rollovers and inherited plans.
 - **Engine C (Roth taxable):** Uses Matrix + Relius demo + Roth basis to suggest taxable amount, Roth initial year, and Roth tax codes; excludes inherited plans but does not exclude rollovers.
-- **Engine D (IRA rollover tax-form audit):** Filters IRA check distributions to rows with tax_code_1 or tax_code_2 of G/H, then evaluates federal taxing method and tax form to flag mismatches for correction.
+- **Engine D (IRA rollover tax-form audit):** Filters IRA check distributions to rows with tax_code_1 or tax_code_2 of G/H, then evaluates federal taxing method and tax form to flag mismatches for correction (using shared `core.normalizers` helpers for plan detection and text normalization).
 
 ### 📈 **Business Intelligence**
 - Review-ready outputs: match_status, correction_reason, and action fields for QA

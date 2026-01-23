@@ -251,6 +251,8 @@ identification (case-insensitive prefixes/suffixes).
 ### 2.6 Tax form & federal taxing method normalization (🟡 Important)
 Matrix `tax_form` and `federal_taxing_method` are normalized to trimmed,
 case-insensitive text to support Engine D rollover vs tax-form checks.
+Normalization uses shared helpers in `core.normalizers` to keep Engine D
+consistent with other engines.
 
 ### 2.7 Date filtering (🟡 Important)
 - Optional transaction filters are configured via `DateFilterConfig` in `src/config.py`.
