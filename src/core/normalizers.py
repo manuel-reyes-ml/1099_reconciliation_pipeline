@@ -4,9 +4,9 @@ normalizers.py
 
 Shared normalization helpers for canonical data cleaning across engines.
 
-Includes age attainment and Roth plan detection utilities used by analysis
-engines to keep business logic consistent across modules. Validation helpers
-live in `core.validators`.
+Includes age attainment, Roth plan detection, and IRA plan/text normalization
+utilities used by analysis engines to keep business logic consistent across
+modules. Validation helpers live in `core.validators`.
 Correction export helpers normalize action tokens and split rows into action
 groups for multi-tab outputs.
 
@@ -52,7 +52,7 @@ from typing import Any                   # Type hint meaning "this can be anythi
 import pandas as pd
 import re                                # Python's built-in regular expression module
 
-from ..config import DateFilterConfig, RothTaxableConfig
+from ..config import DateFilterConfig, IraRolloverConfig, RothTaxableConfig
 from .validators import normalize_date_filter_config
 
 
@@ -237,6 +237,43 @@ def normalize_tax_code_series(series: pd.Series) -> pd.Series:
     codes = s.str.extract(r"^\s*([A-Za-z0-9]{1,2})", expand=False)
     codes = codes.str.upper()     # '.str' vectorize to the whole Series
     return codes.astype("string") # .astype("string") convert to pandas string dtype(with <NA> for missing)
+
+
+def _normalize_compact_upper(series: pd.Series) -> pd.Series:
+    """Normalize text to compact uppercase tokens (strip + remove spaces/hyphens)."""
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.upper()
+        .str.replace(r"\s+", "", regex=True)
+        .str.replace("-", "", regex=False)
+    )
+
+
+def _normalize_space_lower(series: pd.Series) -> pd.Series:
+    """Normalize text to lowercase with normalized whitespace."""
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.lower()
+    )
+
+
+def _is_ira_plan(series: pd.Series, cfg: IraRolloverConfig) -> pd.Series:
+    """Return an IRA plan mask using configured prefixes/substrings."""
+    normalized = series.astype("string").str.strip().str.upper()
+    prefixes = tuple(prefix.upper() for prefix in cfg.ira_plan_prefixes)
+    substrings = tuple(substring.upper() for substring in cfg.ira_plan_substrings)
+    filled = normalized.fillna("")
+    prefix_match = (
+        filled.str.startswith(prefixes) if prefixes else pd.Series(False, index=filled.index)
+    )
+    substring_match = pd.Series(False, index=filled.index)
+    for substring in substrings:
+        if substring:
+            substring_match |= filled.str.contains(substring, regex=False)
+    return prefix_match | substring_match
 
 
 def _normalize_action_tokens(action_val: object) -> list[str]:
