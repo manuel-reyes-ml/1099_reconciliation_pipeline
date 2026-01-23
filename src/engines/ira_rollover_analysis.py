@@ -14,6 +14,8 @@ then evaluates the federal taxing method and tax form:
 Plan detection is config-driven:
   - plan_id starts with configured prefixes (default: 300001, 300005), OR
   - plan_id contains configured substrings (default: "IRA")
+Normalization helpers are shared in `core.normalizers` to keep behavior
+consistent across engines.
 
 Public API
 ----------
@@ -32,7 +34,14 @@ from ..config import (
     IRA_ROLLOVER_CONFIG,
     MATCH_STATUS_CONFIG,
 )
-from ..core.normalizers import apply_date_filter, normalize_tax_code_series, _append_reason
+from ..core.normalizers import (
+    _append_reason,
+    _is_ira_plan,
+    _normalize_compact_upper,
+    _normalize_space_lower,
+    apply_date_filter,
+    normalize_tax_code_series,
+)
 
 
 def _validate_required_columns(df: pd.DataFrame, required_cols: list[str]) -> None:
@@ -40,40 +49,6 @@ def _validate_required_columns(df: pd.DataFrame, required_cols: list[str]) -> No
     if missing:
         missing_list = ", ".join(missing)
         raise ValueError(f"Missing required columns: {missing_list}")
-
-
-def _normalize_compact_upper(series: pd.Series) -> pd.Series:
-    return (
-        series.astype("string")
-        .str.strip()
-        .str.upper()
-        .str.replace(r"\s+", "", regex=True)
-        .str.replace("-", "", regex=False)
-    )
-
-
-def _normalize_space_lower(series: pd.Series) -> pd.Series:
-    return (
-        series.astype("string")
-        .str.strip()
-        .str.replace(r"\s+", " ", regex=True)
-        .str.lower()
-    )
-
-
-def _is_ira_plan(series: pd.Series, cfg: IraRolloverConfig) -> pd.Series:
-    normalized = series.astype("string").str.strip().str.upper()
-    prefixes = tuple(prefix.upper() for prefix in cfg.ira_plan_prefixes)
-    substrings = tuple(substring.upper() for substring in cfg.ira_plan_substrings)
-    filled = normalized.fillna("")
-    prefix_match = (
-        filled.str.startswith(prefixes) if prefixes else pd.Series(False, index=filled.index)
-    )
-    substring_match = pd.Series(False, index=filled.index)
-    for substring in substrings:
-        if substring:
-            substring_match |= filled.str.contains(substring, regex=False)
-    return prefix_match | substring_match
 
 
 def run_ira_rollover_analysis(
