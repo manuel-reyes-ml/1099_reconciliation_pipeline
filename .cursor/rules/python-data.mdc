@@ -1,0 +1,560 @@
+---
+description: Universal Python and Data Engineering standards for production-grade code
+globs: ["*.py", "**/*.py"]
+alwaysApply: true
+---
+
+# Python & Data Engineering Standards
+
+> Universal rules for production-grade Python code across all projects.
+> Aligned with industry best practices and career progression from Data Analyst → LLM Engineer.
+
+---
+
+## 🎯 Code Philosophy
+
+### Guiding Principles
+1. **Readability over cleverness** — Code is read 10x more than written
+2. **Explicit over implicit** — No magic; make intentions clear
+3. **Fail fast, fail loud** — Catch errors early with meaningful messages
+4. **Test what matters** — Coverage is a tool, not a goal
+5. **Document for your future self** — You won't remember in 6 months
+
+---
+
+## 📐 Code Style
+
+### Naming Conventions
+```python
+# Variables and functions: snake_case
+user_count = 0
+def calculate_total_amount():
+    pass
+
+# Classes: PascalCase
+class DataProcessor:
+    pass
+
+# Constants: SCREAMING_SNAKE_CASE
+MAX_RETRY_ATTEMPTS = 3
+DEFAULT_TIMEOUT_SECONDS = 30
+
+# Private methods/attributes: single leading underscore
+def _internal_helper():
+    pass
+
+# "Dunder" methods: double underscore (Python reserved)
+def __init__(self):
+    pass
+```
+
+### Formatting Standards
+- **Line length:** 88 characters (Black formatter default)
+- **Indentation:** 4 spaces (never tabs)
+- **Imports:** Group in order: stdlib → third-party → local, alphabetized within groups
+- **Blank lines:** 2 between top-level definitions, 1 between methods
+- **Trailing commas:** Always in multi-line structures (enables cleaner diffs)
+
+### Import Organization
+```python
+# Standard library
+import logging
+import os
+from datetime import datetime
+from pathlib import Path
+
+# Third-party packages
+import pandas as pd
+import numpy as np
+from pydantic import BaseModel
+
+# Local application imports
+from src.config import settings
+from src.utils.validators import validate_input
+```
+
+---
+
+## 🔤 Type Hints (Required)
+
+### Function Signatures
+```python
+# ✅ Good: Full type hints with return type
+def process_records(
+    df: pd.DataFrame,
+    column_name: str,
+    threshold: float = 0.5,
+) -> pd.DataFrame:
+    """Process records based on threshold."""
+    pass
+
+# ❌ Bad: No type hints
+def process_records(df, column_name, threshold=0.5):
+    pass
+```
+
+### Common Type Patterns
+```python
+from typing import Optional, Union, List, Dict, Any, Callable, Tuple
+
+# Optional (can be None)
+def find_user(user_id: str) -> Optional[dict]:
+    pass
+
+# Union (multiple types)
+def parse_value(value: Union[str, int]) -> float:
+    pass
+
+# Collections with element types
+def get_names() -> List[str]:
+    pass
+
+def get_config() -> Dict[str, Any]:
+    pass
+
+# Callable (function as parameter)
+def apply_transform(data: pd.DataFrame, func: Callable[[pd.Series], pd.Series]) -> pd.DataFrame:
+    pass
+```
+
+---
+
+## 📝 Docstrings (Google Style)
+
+### Function Docstring Template
+```python
+def reconcile_amounts(
+    source_df: pd.DataFrame,
+    target_df: pd.DataFrame,
+    tolerance: float = 0.50,
+) -> pd.DataFrame:
+    """Reconcile amounts between source and target DataFrames.
+
+    Compares amounts from two sources and flags discrepancies
+    that exceed the specified tolerance threshold.
+
+    Args:
+        source_df: DataFrame containing source system amounts.
+            Must have columns: ['id', 'amount', 'date'].
+        target_df: DataFrame containing target system amounts.
+            Must have columns: ['id', 'amount', 'date'].
+        tolerance: Maximum allowed difference for matching.
+            Defaults to 0.50.
+
+    Returns:
+        DataFrame with reconciliation results including:
+            - match_status: 'MATCHED' | 'DISCREPANCY' | 'MISSING'
+            - difference: Calculated amount difference
+            - action: Recommended action for review
+
+    Raises:
+        ValueError: If required columns are missing from input DataFrames.
+        TypeError: If tolerance is not a numeric value.
+
+    Example:
+        >>> source = pd.DataFrame({'id': [1, 2], 'amount': [100.0, 200.0]})
+        >>> target = pd.DataFrame({'id': [1, 2], 'amount': [100.0, 199.0]})
+        >>> result = reconcile_amounts(source, target, tolerance=0.50)
+        >>> result['match_status'].tolist()
+        ['MATCHED', 'DISCREPANCY']
+    """
+    pass
+```
+
+### Class Docstring Template
+```python
+class DataPipeline:
+    """Orchestrates data extraction, transformation, and loading.
+
+    This class manages the end-to-end data pipeline workflow,
+    handling configuration, validation, and error recovery.
+
+    Attributes:
+        config: Pipeline configuration settings.
+        logger: Configured logging instance.
+        is_initialized: Whether pipeline has been set up.
+
+    Example:
+        >>> pipeline = DataPipeline(config={'source': 'db'})
+        >>> pipeline.run()
+        >>> print(pipeline.status)
+        'completed'
+    """
+    pass
+```
+
+---
+
+## 🐼 pandas Best Practices
+
+### DataFrame Operations
+```python
+# ✅ Always use .copy() when creating derived DataFrames
+filtered_df = original_df[original_df['status'] == 'active'].copy()
+
+# ✅ Use .loc[] for assignment (avoids SettingWithCopyWarning)
+df.loc[df['amount'] < 0, 'flag'] = 'NEGATIVE'
+
+# ❌ Avoid chained indexing
+df[df['amount'] < 0]['flag'] = 'NEGATIVE'  # May not work!
+
+# ✅ Use nullable dtypes for data with missing values
+df['count'] = df['count'].astype('Int64')      # Nullable integer
+df['amount'] = df['amount'].astype('Float64')  # Nullable float
+
+# ✅ Use pd.NA for missing values (not np.nan for nullable dtypes)
+df.loc[mask, 'value'] = pd.NA
+
+# ✅ Prefer vectorized operations over .apply()
+# Good:
+df['total'] = df['price'] * df['quantity']
+# Slower:
+df['total'] = df.apply(lambda row: row['price'] * row['quantity'], axis=1)
+
+# ✅ Use .query() for complex filtering (more readable)
+result = df.query('amount > 100 and status == "active"')
+```
+
+### Memory and Performance
+```python
+# ✅ Specify dtypes when reading data
+df = pd.read_csv(
+    'data.csv',
+    dtype={
+        'id': 'str',
+        'amount': 'Float64',
+        'category': 'category',  # For repeated strings
+    },
+    parse_dates=['created_at'],
+)
+
+# ✅ Use categories for repeated string values
+df['status'] = df['status'].astype('category')
+
+# ✅ Select only needed columns early
+df = pd.read_csv('large_file.csv', usecols=['id', 'amount', 'date'])
+```
+
+### Merging and Joining
+```python
+# ✅ Always specify merge type explicitly
+result = pd.merge(
+    left_df,
+    right_df,
+    on='key_column',
+    how='left',           # Be explicit: 'left', 'right', 'inner', 'outer'
+    validate='m:1',       # Validate relationship: '1:1', '1:m', 'm:1', 'm:m'
+    indicator=True,       # Adds _merge column showing match status
+)
+
+# ✅ Check for unexpected duplicates after merge
+assert result.duplicated(subset=['id']).sum() == 0, "Unexpected duplicates!"
+```
+
+---
+
+## ⚠️ Error Handling
+
+### Exception Patterns
+```python
+# ✅ Create custom exceptions for domain-specific errors
+class ValidationError(Exception):
+    """Raised when data validation fails."""
+    pass
+
+class ConfigurationError(Exception):
+    """Raised when configuration is invalid or missing."""
+    pass
+
+# ✅ Raise early with context
+def process_file(filepath: Path) -> pd.DataFrame:
+    if not filepath.exists():
+        raise FileNotFoundError(f"Input file not found: {filepath}")
+    
+    if filepath.suffix not in ['.csv', '.xlsx']:
+        raise ValueError(f"Unsupported file type: {filepath.suffix}")
+    
+    # Happy path continues...
+
+# ✅ Catch specific exceptions, not bare except
+try:
+    result = risky_operation()
+except ValueError as e:
+    logger.warning(f"Invalid value encountered: {e}")
+    result = default_value
+except FileNotFoundError as e:
+    logger.error(f"Required file missing: {e}")
+    raise  # Re-raise if unrecoverable
+
+# ❌ Never use bare except
+try:
+    result = something()
+except:  # Catches EVERYTHING including KeyboardInterrupt!
+    pass
+```
+
+### Guard Clauses (Early Returns)
+```python
+# ✅ Good: Guard clauses reduce nesting
+def calculate_bonus(employee: dict) -> float:
+    if employee is None:
+        return 0.0
+    
+    if employee.get('status') != 'active':
+        return 0.0
+    
+    if employee.get('tenure_years', 0) < 1:
+        return 0.0
+    
+    # Happy path: calculate actual bonus
+    base_salary = employee['salary']
+    return base_salary * 0.10
+
+# ❌ Bad: Deeply nested conditionals
+def calculate_bonus(employee: dict) -> float:
+    if employee is not None:
+        if employee.get('status') == 'active':
+            if employee.get('tenure_years', 0) >= 1:
+                base_salary = employee['salary']
+                return base_salary * 0.10
+    return 0.0
+```
+
+---
+
+## 📊 Logging (Not Print)
+
+### Logging Setup
+```python
+import logging
+
+# Configure at module level
+logger = logging.getLogger(__name__)
+
+# In main/entry point, configure the root logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(name)s | %(levelname)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+)
+```
+
+### Logging Levels
+```python
+# DEBUG: Detailed diagnostic information
+logger.debug(f"Processing row {idx}: {row.to_dict()}")
+
+# INFO: Confirmation that things work as expected
+logger.info(f"Loaded {len(df)} records from {filepath}")
+
+# WARNING: Something unexpected but code can continue
+logger.warning(f"Missing optional column 'notes', using default")
+
+# ERROR: Serious problem, some functionality failed
+logger.error(f"Failed to process file {filepath}: {e}")
+
+# CRITICAL: Program cannot continue
+logger.critical(f"Database connection failed, shutting down")
+```
+
+### Structured Logging for Production
+```python
+# ✅ Include context in log messages
+logger.info(
+    "Processing complete",
+    extra={
+        'records_processed': len(df),
+        'duration_seconds': elapsed,
+        'output_file': str(output_path),
+    }
+)
+```
+
+---
+
+## 🧪 Testing Standards
+
+### Test Structure
+```python
+import pytest
+import pandas as pd
+from src.module import function_to_test
+
+class TestFunctionName:
+    """Tests for function_to_test."""
+
+    def test_happy_path(self):
+        """Should return expected result for valid input."""
+        result = function_to_test(valid_input)
+        assert result == expected_output
+
+    def test_empty_input(self):
+        """Should handle empty input gracefully."""
+        result = function_to_test([])
+        assert result == []
+
+    def test_invalid_input_raises(self):
+        """Should raise ValueError for invalid input."""
+        with pytest.raises(ValueError, match="Invalid"):
+            function_to_test(invalid_input)
+
+    @pytest.mark.parametrize("input,expected", [
+        (1, 2),
+        (2, 4),
+        (0, 0),
+    ])
+    def test_multiple_cases(self, input, expected):
+        """Should handle various inputs correctly."""
+        assert function_to_test(input) == expected
+```
+
+### DataFrame Testing
+```python
+import pandas.testing as tm
+
+def test_dataframe_transformation():
+    """Should transform DataFrame correctly."""
+    input_df = pd.DataFrame({'a': [1, 2], 'b': [3, 4]})
+    expected_df = pd.DataFrame({'a': [1, 2], 'b': [3, 4], 'c': [4, 6]})
+    
+    result = transform_function(input_df)
+    
+    tm.assert_frame_equal(result, expected_df)
+```
+
+### Fixtures for Reusable Test Data
+```python
+@pytest.fixture
+def sample_dataframe():
+    """Create sample DataFrame for testing."""
+    return pd.DataFrame({
+        'id': ['A001', 'A002', 'A003'],
+        'amount': [100.0, 200.0, 300.0],
+        'status': ['active', 'active', 'inactive'],
+    })
+
+def test_filter_active(sample_dataframe):
+    """Should filter to active records only."""
+    result = filter_active(sample_dataframe)
+    assert len(result) == 2
+```
+
+---
+
+## 🔒 Security & Privacy
+
+### Never Expose Sensitive Data
+```python
+# ✅ Mask sensitive values in logs and debug output
+def mask_ssn(ssn: str) -> str:
+    """Mask SSN for safe logging: 123-45-6789 → ***-**-6789"""
+    if len(ssn) >= 4:
+        return f"***-**-{ssn[-4:]}"
+    return "***"
+
+# ✅ Use environment variables for secrets
+import os
+api_key = os.environ.get('API_KEY')
+
+# ❌ Never hardcode secrets
+api_key = "sk-abc123..."  # NEVER DO THIS
+```
+
+### Safe File Handling
+```python
+# ✅ Use pathlib for cross-platform paths
+from pathlib import Path
+
+data_dir = Path(__file__).parent / 'data'
+output_file = data_dir / 'results.csv'
+
+# ✅ Use context managers for file operations
+with open(filepath, 'r') as f:
+    content = f.read()
+```
+
+---
+
+## 📁 Project Structure (Recommended)
+```
+project_name/
+├── src/
+│   ├── __init__.py
+│   ├── config/          # Configuration and settings
+│   │   ├── __init__.py
+│   │   └── settings.py
+│   ├── core/            # Core business logic
+│   │   ├── __init__.py
+│   │   └── processor.py
+│   └── utils/           # Shared utilities
+│       ├── __init__.py
+│       ├── validators.py
+│       └── helpers.py
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py      # Shared fixtures
+│   ├── unit/
+│   └── integration/
+├── data/
+│   ├── sample/          # Sample/synthetic data only
+│   └── .gitkeep
+├── notebooks/           # Exploration and documentation
+├── docs/
+├── .cursorrules
+├── .cursor/rules/
+├── pyproject.toml       # Project config (preferred over setup.py)
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 🚫 Anti-Patterns to Avoid
+```python
+# ❌ Mutable default arguments
+def append_item(item, items=[]):  # BUG: list persists between calls!
+    items.append(item)
+    return items
+
+# ✅ Use None and create inside function
+def append_item(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+
+# ❌ Using == for None comparison
+if value == None:
+    pass
+
+# ✅ Use 'is' for None
+if value is None:
+    pass
+
+# ❌ Catching and silencing all errors
+try:
+    risky_thing()
+except:
+    pass  # Silent failure hides bugs
+
+# ❌ String concatenation in loops (inefficient)
+result = ""
+for item in items:
+    result += str(item)  # Creates new string each time
+
+# ✅ Use join
+result = "".join(str(item) for item in items)
+```
+
+---
+
+## ✅ Quality Checklist (Before Every Commit)
+
+- [ ] All functions have type hints
+- [ ] All public functions have docstrings
+- [ ] No `print()` statements (use logging)
+- [ ] No hardcoded secrets or sensitive data
+- [ ] Tests pass: `pytest tests/ -v`
+- [ ] Code formatted: `black src/ tests/`
+- [ ] Imports sorted: `isort src/ tests/`
+- [ ] No linting errors: `ruff check src/`
