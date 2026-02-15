@@ -119,7 +119,7 @@ def apply_transform(data: pd.DataFrame, func: Callable[[pd.Series], pd.Series]) 
 
 ---
 
-## 📝 Docstrings (Google Style)
+## 📝 Docstrings (NumPy Style)
 
 ### Function Docstring Template
 ```python
@@ -133,30 +133,40 @@ def reconcile_amounts(
     Compares amounts from two sources and flags discrepancies
     that exceed the specified tolerance threshold.
 
-    Args:
-        source_df: DataFrame containing source system amounts.
-            Must have columns: ['id', 'amount', 'date'].
-        target_df: DataFrame containing target system amounts.
-            Must have columns: ['id', 'amount', 'date'].
-        tolerance: Maximum allowed difference for matching.
-            Defaults to 0.50.
+    Parameters
+    ----------
+    source_df : pd.DataFrame
+        DataFrame containing source system amounts.
+        Must have columns: ['id', 'amount', 'date'].
+    target_df : pd.DataFrame
+        DataFrame containing target system amounts.
+        Must have columns: ['id', 'amount', 'date'].
+    tolerance : float, optional
+        Maximum allowed difference for matching.
+        Defaults to 0.50.
 
-    Returns:
+    Returns
+    -------
+    pd.DataFrame
         DataFrame with reconciliation results including:
-            - match_status: 'MATCHED' | 'DISCREPANCY' | 'MISSING'
-            - difference: Calculated amount difference
-            - action: Recommended action for review
+        - match_status: 'MATCHED' | 'DISCREPANCY' | 'MISSING'
+        - difference: Calculated amount difference
+        - action: Recommended action for review
 
-    Raises:
-        ValueError: If required columns are missing from input DataFrames.
-        TypeError: If tolerance is not a numeric value.
+    Raises
+    ------
+    ValueError
+        If required columns are missing from input DataFrames.
+    TypeError
+        If tolerance is not a numeric value.
 
-    Example:
-        >>> source = pd.DataFrame({'id': [1, 2], 'amount': [100.0, 200.0]})
-        >>> target = pd.DataFrame({'id': [1, 2], 'amount': [100.0, 199.0]})
-        >>> result = reconcile_amounts(source, target, tolerance=0.50)
-        >>> result['match_status'].tolist()
-        ['MATCHED', 'DISCREPANCY']
+    Examples
+    --------
+    >>> source = pd.DataFrame({'id': [1, 2], 'amount': [100.0, 200.0]})
+    >>> target = pd.DataFrame({'id': [1, 2], 'amount': [100.0, 199.0]})
+    >>> result = reconcile_amounts(source, target, tolerance=0.50)
+    >>> result['match_status'].tolist()
+    ['MATCHED', 'DISCREPANCY']
     """
     pass
 ```
@@ -169,16 +179,21 @@ class DataPipeline:
     This class manages the end-to-end data pipeline workflow,
     handling configuration, validation, and error recovery.
 
-    Attributes:
-        config: Pipeline configuration settings.
-        logger: Configured logging instance.
-        is_initialized: Whether pipeline has been set up.
+    Attributes
+    ----------
+    config : dict
+        Pipeline configuration settings.
+    logger : logging.Logger
+        Configured logging instance.
+    is_initialized : bool
+        Whether pipeline has been set up.
 
-    Example:
-        >>> pipeline = DataPipeline(config={'source': 'db'})
-        >>> pipeline.run()
-        >>> print(pipeline.status)
-        'completed'
+    Examples
+    --------
+    >>> pipeline = DataPipeline(config={'source': 'db'})
+    >>> pipeline.run()
+    >>> print(pipeline.status)
+    'completed'
     """
     pass
 ```
@@ -255,6 +270,82 @@ assert result.duplicated(subset=['id']).sum() == 0, "Unexpected duplicates!"
 
 ## ⚠️ Error Handling
 
+### Pydantic for Structured Outputs & Validation
+
+```python
+from pydantic import BaseModel, Field
+from typing import Optional
+from enum import Enum
+
+# ✅ Define response schemas for LLM structured outputs
+class RiskLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class DemandInsight(BaseModel):
+    """Structured output schema for AI-generated demand analysis."""
+
+    summary: str = Field(
+        ...,
+        description="One-sentence summary of the demand pattern",
+        max_length=200,
+    )
+    trend_direction: str = Field(
+        ...,
+        description="Direction of demand trend",
+        pattern=r"^(increasing|decreasing|stable)$",
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Model confidence in the analysis (0-1)",
+    )
+    risk_level: RiskLevel = Field(
+        ...,
+        description="Risk level for capacity planning",
+    )
+    recommended_action: Optional[str] = Field(
+        default=None,
+        description="Suggested next step for operations team",
+    )
+
+# ✅ Validate AI responses — reject malformed outputs
+try:
+    insight = DemandInsight.model_validate(ai_response)
+except ValidationError as e:
+    logger.error(f"AI response failed validation: {e}")
+    # Fallback or retry logic here
+
+# ✅ Use for config validation too
+class PipelineConfig(BaseModel):
+    """Validated configuration — catches errors at startup, not runtime."""
+
+    source_path: Path
+    output_dir: Path
+    tolerance: float = Field(default=0.50, ge=0.0, le=1.0)
+    max_retries: int = Field(default=3, ge=1, le=10)
+
+    class Config:
+        frozen = True  # Immutable after creation
+```
+
+### Pydantic Best Practices
+```python
+# ✅ Use Field() with descriptions — doubles as LLM schema documentation
+# ✅ Use validators (ge, le, pattern, max_length) — catch bad data early
+# ✅ Use Enum types for constrained string fields
+# ✅ Use frozen=True for configs that shouldn't change after creation
+# ✅ Use model_validate() not __init__() for external data (API responses, files)
+
+# ❌ Don't use plain dicts where Pydantic models would add safety
+# ❌ Don't skip Field descriptions — they feed into LLM JSON schemas
+# ❌ Don't catch ValidationError silently — log and handle explicitly
+```
+
+---
+
 ### Exception Patterns
 ```python
 # ✅ Create custom exceptions for domain-specific errors
@@ -322,7 +413,75 @@ def calculate_bonus(employee: dict) -> float:
 
 ---
 
-## 📊 Logging (Not Print)
+## ⚡ Async Patterns (API Calls & Data Collection)
+
+### When to Use Async
+```python
+# Use async when:
+# - Making multiple API calls (LLM SDKs, REST APIs, data collectors)
+# - I/O-bound operations that can run concurrently
+# - Building Streamlit apps that call external services
+
+# Do NOT use async when:
+# - CPU-bound operations (use multiprocessing instead)
+# - Simple scripts with a single sequential flow
+# - You don't understand the pattern yet (learn sync first, then async)
+```
+
+### Basic Async Pattern with httpx
+```python
+import httpx
+import asyncio
+
+# ✅ Async HTTP client for API calls
+async def fetch_market_data(
+    symbols: list[str],
+    client: httpx.AsyncClient,
+) -> dict[str, dict]:
+    """Fetch market data for multiple symbols concurrently.
+
+    Parameters
+    ----------
+    symbols : list[str]
+        Stock ticker symbols to fetch.
+    client : httpx.AsyncClient
+        Shared async HTTP client (reuse for connection pooling).
+
+    Returns
+    -------
+    dict[str, dict]
+        Symbol-keyed dictionary of market data responses.
+    """
+    tasks = [client.get(f"/api/quote/{s}") for s in symbols]
+    responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+    results = {}
+    for symbol, response in zip(symbols, responses):
+        if isinstance(response, Exception):
+            logger.error(f"Failed to fetch {symbol}: {response}")
+            continue
+        results[symbol] = response.json()
+    return results
+
+# ✅ Always use async context manager for clients
+async def main():
+    async with httpx.AsyncClient(base_url="https://api.example.com") as client:
+        data = await fetch_market_data(["AAPL", "MSFT", "GOOGL"], client)
+```
+
+### Async Best Practices
+```python
+# ✅ Use asyncio.gather() for concurrent calls (not sequential awaits)
+# ✅ Use return_exceptions=True to prevent one failure from killing all tasks
+# ✅ Use httpx.AsyncClient as context manager (auto-closes connections)
+# ✅ Add timeouts: httpx.AsyncClient(timeout=30.0)
+
+# ❌ Don't mix sync and async in the same function
+# ❌ Don't create a new client per request (connection pooling matters)
+# ❌ Don't use requests library in async code (use httpx instead)
+```
+
+---
 
 ### Logging Setup
 ```python
@@ -486,6 +645,12 @@ project_name/
 │   ├── core/            # Core business logic
 │   │   ├── __init__.py
 │   │   └── processor.py
+│   ├── ai/              # LLM SDK integration (provider-agnostic)
+│   │   ├── __init__.py
+│   │   ├── provider.py      # SDK abstraction (Gemini primary, fallbacks)
+│   │   ├── schemas.py       # Pydantic models for structured outputs
+│   │   ├── guardrails.py    # Query validation, response sanitization
+│   │   └── observability.py # Token/cost/latency logging
 │   └── utils/           # Shared utilities
 │       ├── __init__.py
 │       ├── validators.py
@@ -498,6 +663,8 @@ project_name/
 ├── data/
 │   ├── sample/          # Sample/synthetic data only
 │   └── .gitkeep
+├── logs/                # Runtime logs (gitignored)
+│   └── ai/              # AI-specific logs (queries, guardrails, costs)
 ├── notebooks/           # Exploration and documentation
 ├── docs/
 ├── .cursorrules
@@ -505,6 +672,76 @@ project_name/
 ├── pyproject.toml       # Project config (preferred over setup.py)
 ├── requirements.txt
 └── README.md
+```
+
+---
+
+## 🖥️ Streamlit Conventions (Dashboard & AI UI)
+
+### App Structure
+```python
+# ✅ Multi-page app structure (recommended for dashboards)
+# project/
+# ├── app.py                  # Entry point with st.navigation
+# ├── pages/
+# │   ├── 01_Overview.py
+# │   ├── 02_Analysis.py
+# │   ├── 03_AI_Chat.py
+# │   └── 04_Settings.py
+# └── src/                    # Business logic (NOT in pages/)
+```
+
+### Caching Strategy
+```python
+import streamlit as st
+
+# ✅ Cache data loading (returns new copy each call — safe for DataFrames)
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def load_data(filepath: str) -> pd.DataFrame:
+    """Load and cache data. TTL prevents stale data."""
+    return pd.read_parquet(filepath)
+
+# ✅ Cache resource objects (returns SAME object — use for DB connections, clients)
+@st.cache_resource
+def get_llm_client() -> object:
+    """Create and cache LLM client. Shared across all users/reruns."""
+    return genai.GenerativeModel("gemini-2.0-flash")
+
+# ❌ Don't cache functions with side effects (logging, writes, API mutations)
+# ❌ Don't use @st.cache_data for unhashable objects (DB connections, clients)
+# ❌ Don't forget TTL on data caches — stale data causes confusion
+```
+
+### Session State for AI Interactions
+```python
+# ✅ Initialize state once, use everywhere
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+    st.session_state.total_tokens = 0
+    st.session_state.total_cost = 0.0
+
+# ✅ Append AI responses to session state for conversation memory
+st.session_state.chat_history.append({
+    "role": "assistant",
+    "content": response.text,
+    "tokens": response.usage_metadata.total_token_count,
+})
+
+# ❌ Don't store large DataFrames in session state (use @st.cache_data instead)
+# ❌ Don't assume session state persists across browser tabs
+```
+
+### Streamlit + LLM SDK Pattern
+```python
+# ✅ Keep business logic out of Streamlit pages
+# pages/03_AI_Chat.py calls src/ai/provider.py — never has SDK logic inline
+
+# ✅ Show AI observability to users
+st.sidebar.metric("Tokens Used", st.session_state.total_tokens)
+st.sidebar.metric("Est. Cost", f"${st.session_state.total_cost:.4f}")
+
+# ✅ Always show disclaimers for AI-generated content
+st.caption("⚠️ AI-generated insight. Verify before acting.")
 ```
 
 ---
@@ -551,10 +788,12 @@ result = "".join(str(item) for item in items)
 ## ✅ Quality Checklist (Before Every Commit)
 
 - [ ] All functions have type hints
-- [ ] All public functions have docstrings
+- [ ] All public functions have NumPy-style docstrings
 - [ ] No `print()` statements (use logging)
 - [ ] No hardcoded secrets or sensitive data
+- [ ] Pydantic models validate all external data (API responses, configs, file inputs)
 - [ ] Tests pass: `pytest tests/ -v`
 - [ ] Code formatted: `black src/ tests/`
 - [ ] Imports sorted: `isort src/ tests/`
 - [ ] No linting errors: `ruff check src/`
+- [ ] AI responses validated through Pydantic schemas (never trust raw LLM output)
