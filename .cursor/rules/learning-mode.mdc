@@ -171,6 +171,22 @@ Try these exercises:
 - Repository pattern
 - Dependency injection
 
+**GenAI / LLM SDK Patterns** (SDK-first architecture)
+- LLM SDK calls: request/response lifecycle, token counting, cost tracking
+- Structured outputs: Pydantic models as response schemas, validation on every call
+- Provider abstraction: Gemini primary, OpenAI/Claude fallback, switching without code rewrites
+- AI guardrails: query validation, response sanitization, governance-as-code
+- AI observability: logging token usage, latency, cost per query, provider used
+- Prompt engineering: system prompts, few-shot examples, temperature tuning
+- Error handling for API calls: rate limits, retries, timeout strategies, fallback providers
+
+**Streamlit Patterns** (dashboard and AI UI development)
+- App lifecycle: script re-runs on every interaction
+- `st.cache_data` vs `st.cache_resource` and when to use each
+- Session state for persisting data across re-runs
+- Multi-page app structure with `st.navigation`
+- Connecting Streamlit to LLM SDKs and displaying AI responses
+
 ---
 
 ## 🔄 Learning Checkpoints
@@ -216,39 +232,47 @@ Suggested next steps:
 
 ### Stage-Appropriate Explanations
 
-**Stage 1 (Data Analyst)** — Currently Active
+**Stage 1 (GenAI-First Data Analyst & AI Engineer)** — Currently Active
 - Explain Python basics thoroughly
 - Connect to spreadsheet/Excel concepts when helpful
 - Emphasize SQL fundamentals
 - Focus on pandas core operations
 - Introduce testing basics
+- Explain LLM SDK patterns (API calls, structured outputs, provider switching)
+- Cover Pydantic models for data validation and AI response schemas
+- Introduce Streamlit patterns (caching, session state, component lifecycle)
+- Explain async/await basics when working with API calls and httpx
+- Connect AI concepts to financial services domain when relevant
 
-**Stage 2 (Data Engineer)**
+**Stage 2 (GenAI Data Engineer + AI Systems Architect)**
 - Assume Python proficiency
 - Introduce cloud concepts (AWS)
 - Explain distributed processing
 - Cover data pipeline architecture
 - Introduce infrastructure as code
+- Explain Vector DBs, RAG infrastructure, embedding pipelines
 
-**Stage 3 (ML Engineer)**
+**Stage 3 (ML Engineer + Local LLM Specialist)**
 - Assume data engineering knowledge
 - Explain ML concepts from scratch
 - Connect statistics to practical applications
 - Cover model evaluation thoroughly
 - Introduce MLOps concepts
+- Explain fine-tuning (LoRA/QLoRA), local LLM deployment with Ollama
 
-**Stage 4 (LLM Specialist)**
+**Stage 4 (Agentic AI Engineer & LLM Specialist)**
 - Assume ML fundamentals
 - Explain transformer architecture
 - Cover prompt engineering deeply
 - Introduce RAG and vector databases
-- Explain agent architectures
+- Explain agent architectures (MCP, LangGraph, CrewAI, multi-agent orchestration)
 
 **Stage 5 (Senior LLM Engineer)**
 - Focus on architecture decisions
 - Emphasize production considerations
 - Cover system design
 - Leadership and mentoring aspects
+- Explain LLMOps: automated testing, CI/CD for AI, production monitoring
 
 ---
 
