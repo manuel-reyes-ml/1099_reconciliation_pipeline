@@ -353,10 +353,10 @@ def process_file(filepath: Path) -> pd.DataFrame:
 try:
     result = risky_operation()
 except ValueError as e:
-    logger.warning(f"Invalid value encountered: {e}")
+    logger.warning("Invalid value encountered: %s", e)
     result = default_value
 except FileNotFoundError as e:
-    logger.error(f"Required file missing: {e}")
+    logger.error("Required file missing: %s", e)
     raise
 ```
 
@@ -407,7 +407,7 @@ async def fetch_market_data(
     results = {}
     for symbol, response in zip(symbols, responses):
         if isinstance(response, Exception):
-            logger.error(f"Failed to fetch {symbol}: {response}")
+            logger.error("Failed to fetch %s: %s", symbol, response)
             continue
         results[symbol] = response.json()
     return results
@@ -435,11 +435,15 @@ logging.basicConfig(
 
 ### Logging Levels
 ```python
-logger.debug(f"Processing row {idx}: {row.to_dict()}")
-logger.info(f"Loaded {len(df)} records from {filepath}")
-logger.warning(f"Missing optional column 'notes', using default")
-logger.error(f"Failed to process file {filepath}: {e}")
-logger.critical(f"Database connection failed, shutting down")
+# ✅ Use %-style formatting (lazy evaluation — string built only if level enabled)
+logger.debug("Processing row %d: %s", idx, row.to_dict())
+logger.info("Loaded %d records from %s", len(df), filepath)
+logger.warning("Missing optional column '%s', using default", col_name)
+logger.error("Failed to process file %s: %s", filepath, e)
+logger.critical("Database connection failed: %s", e)
+
+# ❌ Avoid f-strings in log calls (string always built, even if level is disabled)
+logger.debug(f"Processing row {idx}: {row.to_dict()}")  # Wasteful at INFO level
 ```
 
 ---
@@ -769,6 +773,7 @@ result = "".join(str(item) for item in items)
 - [ ] All functions have type hints (PEP 604 union syntax: `X | None`)
 - [ ] All public functions have NumPy-style docstrings
 - [ ] No `print()` statements (use logging)
+- [ ] Logger calls use `%s`/`%d` lazy formatting (not f-strings)
 - [ ] No hardcoded secrets or sensitive data
 - [ ] Pydantic models validate all external data (API responses, configs, file inputs)
 - [ ] Tests pass: `make test`
