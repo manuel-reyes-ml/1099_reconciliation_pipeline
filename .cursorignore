@@ -1,0 +1,44 @@
+# .cursorignore
+# Prevent Cursor from indexing files that waste context window tokens.
+# This improves AI output quality by keeping irrelevant data out of prompts.
+
+# ── Data files (large, binary, or sensitive) ──────────────────────────
+data/raw/
+data/processed/
+data/outputs/
+*.parquet
+*.xlsx
+*.xls
+*.csv
+
+# ── Logs & evaluation artifacts ───────────────────────────────────────
+logs/
+*.log
+
+# ── Python artifacts ──────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# ── Test caches ───────────────────────────────────────────────────────
+.pytest_cache/
+.deepeval_cache/
+htmlcov/
+.coverage
+
+# ── Docker build context ─────────────────────────────────────────────
+.docker/
+
+# ── IDE & OS ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Secrets ───────────────────────────────────────────────────────────
+.env
+.env.local
+*.pem
