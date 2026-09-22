@@ -236,6 +236,10 @@ temp/
 docs/_build/
 docs/.doctrees/
 
+# Claude
+.claude/settings.local.json
+CLAUDE.local.md
+
 # ============================================================================
 # KEEP THESE FILES (EXCEPTIONS)
 # ============================================================================
